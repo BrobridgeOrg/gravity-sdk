@@ -11,3 +11,5 @@ require (
 	github.com/sirupsen/logrus v1.7.0
 	google.golang.org/protobuf v1.23.0
 )
+
+replace github.com/BrobridgeOrg/gravity-api => ../gravity-api

@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	dsa "github.com/BrobridgeOrg/gravity-api/service/dsa"
@@ -13,16 +14,57 @@ type AdapterConnector struct {
 	host     string
 	options  *Options
 	eventbus *EventBus
+	buffer   *RequestBuffer
 }
 
 func NewAdapterConnector() *AdapterConnector {
-	return &AdapterConnector{}
+	ac := &AdapterConnector{
+		buffer: NewRequestBuffer(1000),
+	}
+
+	go ac.startPublisher()
+
+	return ac
 }
 
-func (dc *AdapterConnector) Connect(host string, options *Options) error {
+func (ac *AdapterConnector) startPublisher() {
 
-	dc.host = host
-	dc.options = options
+	for {
+		select {
+		case requests := <-ac.buffer.output:
+			ac.publish(requests)
+		case <-time.After(50 * time.Millisecond):
+			ac.buffer.Flush()
+		}
+	}
+}
+
+func (ac *AdapterConnector) publish(requests []*Request) error {
+
+	var done int32 = 0
+	for {
+		success, count, err := ac.BatchPublish(requests)
+		if success {
+			return nil
+		}
+
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		for i := int32(0); i < count; i++ {
+			requests[done+i].IsCompleted = true
+			done++
+		}
+	}
+}
+
+func (ac *AdapterConnector) Connect(host string, options *Options) error {
+
+	ac.buffer.SetSize(options.BatchSize)
+	ac.host = host
+	ac.options = options
 
 	opts := EventBusOptions{
 		PingInterval:        time.Duration(options.PingInterval),
@@ -31,23 +73,23 @@ func (dc *AdapterConnector) Connect(host string, options *Options) error {
 	}
 
 	// Create a new instance connector
-	dc.eventbus = NewEventBus(
+	ac.eventbus = NewEventBus(
 		host,
 		EventBusHandler{
 			Reconnect: func(natsConn *nats.Conn) {
 				// re-connected to event server
-				dc.options.ReconnectHandler()
+				ac.options.ReconnectHandler()
 			},
 			Disconnect: func(natsConn *nats.Conn) {
 				// event server was disconnected
-				dc.options.DisconnectHandler()
+				ac.options.DisconnectHandler()
 			},
 		},
 		opts,
 	)
 
 	// Connect to server
-	err := dc.eventbus.Connect()
+	err := ac.eventbus.Connect()
 	if err != nil {
 		return err
 	}
@@ -55,36 +97,81 @@ func (dc *AdapterConnector) Connect(host string, options *Options) error {
 	return nil
 }
 
-func (dc *AdapterConnector) Disconnect() error {
-	return dc.Disconnect()
+func (ac *AdapterConnector) Disconnect() error {
+	return ac.Disconnect()
 }
 
-func (dc *AdapterConnector) Publish(eventName string, payload []byte, meta map[string]interface{}) error {
+func (ac *AdapterConnector) BatchPublish(requests []*Request) (bool, int32, error) {
 
-	request := &dsa.PublishRequest{
-		EventName: eventName,
-		Payload:   payload,
+	request := &dsa.BatchPublishRequest{
+		Requests: make([]*dsa.PublishRequest, 0, len(requests)),
 	}
 
-	reqMsg, _ := proto.Marshal(request)
+	for _, req := range requests {
+		if req.IsCompleted {
+			continue
+		}
+
+		request.Requests = append(request.Requests, &dsa.PublishRequest{
+			EventName: req.EventName,
+			Payload:   req.Payload,
+		})
+	}
 
 	// Send
-	connection := dc.eventbus.GetConnection()
-	resp, err := connection.Request("gravity.dsa.incoming", reqMsg, time.Second*5)
+	connection := ac.eventbus.GetConnection()
+	reqMsg, _ := proto.Marshal(request)
+	resp, err := connection.Request("gravity.dsa.batch", reqMsg, time.Second*30)
 	if err != nil {
-		return err
+		return false, 0, err
 	}
 
 	// Parse reply message
-	var reply dsa.PublishReply
+	var reply dsa.BatchPublishReply
 	err = proto.Unmarshal(resp.Data, &reply)
 	if err != nil {
-		return err
+		return false, 0, err
 	}
 
-	if !reply.Success {
-		return errors.New(reply.Reason)
+	if reply.Success {
+		return true, reply.SuccessCount, nil
 	}
 
+	return false, reply.SuccessCount, errors.New(reply.Reason)
+}
+
+func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[string]interface{}) error {
+
+	ac.buffer.Push(&Request{
+		EventName: eventName,
+		Payload:   payload,
+	})
+	/*
+
+		request := &dsa.PublishRequest{
+			EventName: eventName,
+			Payload:   payload,
+		}
+
+		reqMsg, _ := proto.Marshal(request)
+
+		// Send
+		connection := ac.eventbus.GetConnection()
+		resp, err := connection.Request("gravity.dsa.incoming", reqMsg, time.Second*5)
+		if err != nil {
+			return err
+		}
+
+		// Parse reply message
+		var reply dsa.PublishReply
+		err = proto.Unmarshal(resp.Data, &reply)
+		if err != nil {
+			return err
+		}
+
+		if !reply.Success {
+			return errors.New(reply.Reason)
+		}
+	*/
 	return nil
 }

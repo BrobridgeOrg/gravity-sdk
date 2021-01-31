@@ -3,6 +3,7 @@ package adapter
 import "time"
 
 type Options struct {
+	BatchSize           int
 	PingInterval        time.Duration
 	MaxPingsOutstanding int
 	MaxReconnects       int
@@ -12,6 +13,7 @@ type Options struct {
 
 func NewOptions() *Options {
 	return &Options{
+		BatchSize:           1000,
 		PingInterval:        10 * time.Second,
 		MaxPingsOutstanding: 3,
 		MaxReconnects:       -1,
