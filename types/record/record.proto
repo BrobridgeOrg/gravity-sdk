@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package gravity.sdk.types.record;
+
+enum Method {
+  INSERT = 0;
+  UPDATE = 1;
+  DELETE = 2;
+  TRUNCATE = 3;
+}
+
+enum DataType {
+  BOOLEAN = 0;
+  BINARY = 1;
+  STRING = 2;
+  UINT64 = 3;
+  INT64 = 4;
+  FLOAT64 = 5;
+  ARRAY = 6;
+  MAP = 7;
+}
+
+message SendReply {
+  bool success = 1;
+  string reason = 2;
+}
+
+message Record {
+  string eventName = 1;
+  string table = 2;
+  Method method = 3;
+  string primaryKey = 4;
+  repeated Field fields = 5;
+}
+
+message Field {
+  string name = 1;
+  Value value = 3;
+}
+
+message Value {
+  DataType type = 1;
+  bytes value = 2;
+  MapValue map = 3;
+  ArrayValue array = 4;
+}
+
+message MapValue {
+  repeated Field fields = 1;
+}
+
+message ArrayValue {
+  repeated Value elements = 1;
+}
+
+message TruncateRequest {
+  string table = 1;
+}
+
+message TruncateReply {
+  bool success = 1;
+  string reason = 2;
+}

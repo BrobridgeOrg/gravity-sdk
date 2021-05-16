@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package gravity.sdk.types.event;
+
+message Event {
+  uint64 sequence = 1;
+  bytes data = 2;
+}
