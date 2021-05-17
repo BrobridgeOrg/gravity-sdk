@@ -6,7 +6,7 @@ require (
 	github.com/BrobridgeOrg/EventStore v0.0.5
 	github.com/BrobridgeOrg/broton v0.0.2
 	github.com/BrobridgeOrg/gravity-adapter-nats v0.0.0-20201117192323-d62ed567fa57
-	github.com/BrobridgeOrg/gravity-api v0.2.1
+	github.com/BrobridgeOrg/gravity-api v0.2.12
 	github.com/cfsghost/parallel-chunked-flow v0.0.3
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.4.2
@@ -21,4 +21,4 @@ require (
 	google.golang.org/protobuf v1.23.0
 )
 
-replace github.com/BrobridgeOrg/gravity-api => ../gravity-api
+//replace github.com/BrobridgeOrg/gravity-api => ../gravity-api
