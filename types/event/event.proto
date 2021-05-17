@@ -3,6 +3,7 @@ syntax = "proto3";
 package gravity.sdk.types.event;
 
 message Event {
-  uint64 sequence = 1;
-  bytes data = 2;
+  uint64 pipelineID = 1;
+  uint64 sequence = 2;
+  bytes data = 3;
 }

@@ -37,7 +37,12 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 				return
 			}
 
-			output <- &event
+			msg := messagePool.Get().(*Message)
+			msg.PipelineID = event.PipelineID
+			msg.Subscription = subscription
+			msg.Event = &event
+
+			output <- msg
 		},
 	}
 
@@ -48,8 +53,8 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 
 func (s *Subscription) start() {
 	go func() {
-		for event := range s.buffer.Output() {
-			s.callback(event.(*gravity_sdk_types_event.Event))
+		for msg := range s.buffer.Output() {
+			s.callback(msg.(*Message))
 		}
 	}()
 }

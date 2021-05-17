@@ -9,7 +9,6 @@ import (
 	synchronizer_pb "github.com/BrobridgeOrg/gravity-api/service/synchronizer"
 	"github.com/BrobridgeOrg/gravity-sdk/controller"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
-	gravity_sdk_types_event "github.com/BrobridgeOrg/gravity-sdk/types/event"
 	"github.com/golang/protobuf/proto"
 	nats "github.com/nats-io/nats.go"
 	uuid "github.com/satori/go.uuid"
@@ -18,7 +17,7 @@ import (
 
 var log = logrus.New()
 
-type MessageHandler func(*gravity_sdk_types_event.Event)
+type MessageHandler func(*Message)
 
 type Subscriber struct {
 	client        *core.Client
@@ -248,13 +247,29 @@ func (sub *Subscriber) AddAllPipelines() error {
 
 	for i := uint64(0); i < count; i++ {
 		pipeline := NewPipeline(i, 0)
-		sub.AddPipeline(pipeline)
+		err := sub.AddPipeline(pipeline)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 func (sub *Subscriber) AddPipeline(pipeline *Pipeline) error {
+
+	pipelineState, err := sub.options.StateStore.GetPipelineState(pipeline.id)
+	if err != nil {
+		return err
+	}
+
+	// Load state
+	log.WithFields(logrus.Fields{
+		"pipeline": pipeline.id,
+		"lastSeq":  pipelineState.GetLastSequence(),
+	}).Info("Loaded pipeline state")
+	pipeline.UpdateLastSequence(pipelineState.GetLastSequence())
+
 	sub.pipelines = append(sub.pipelines, pipeline)
 	return nil
 }

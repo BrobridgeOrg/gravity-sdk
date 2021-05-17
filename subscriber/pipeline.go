@@ -11,3 +11,7 @@ func NewPipeline(id uint64, lastSeq uint64) *Pipeline {
 		lastSeq: lastSeq,
 	}
 }
+
+func (pipeline *Pipeline) UpdateLastSequence(sequence uint64) {
+	pipeline.lastSeq = sequence
+}
