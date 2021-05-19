@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	controller_pb "github.com/BrobridgeOrg/gravity-api/service/controller"
+	subscriber_manager_pb "github.com/BrobridgeOrg/gravity-api/service/subscriber_manager"
 	synchronizer_pb "github.com/BrobridgeOrg/gravity-api/service/synchronizer"
 	"github.com/BrobridgeOrg/gravity-sdk/controller"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
@@ -17,6 +17,11 @@ import (
 
 var log = logrus.New()
 
+const (
+	SubscriberType_Transmitter subscriber_manager_pb.SubscriberType = subscriber_manager_pb.SubscriberType_TRANSMITTER
+	SubscriberType_Exporter    subscriber_manager_pb.SubscriberType = subscriber_manager_pb.SubscriberType_EXPORTER
+)
+
 type MessageHandler func(*Message)
 
 type Subscriber struct {
@@ -24,7 +29,6 @@ type Subscriber struct {
 	host          string
 	options       *Options
 	id            string
-	channel       uint64
 	pipelines     []*Pipeline
 	collectionMap map[string][]string
 
@@ -55,7 +59,7 @@ func NewSubscriberWithClient(client *core.Client, options *Options) *Subscriber 
 	return subscriber
 }
 
-func (sub *Subscriber) register(subscriberID string) error {
+func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberType, component string, subscriberID string, name string) error {
 
 	log.WithFields(logrus.Fields{
 		"id": subscriberID,
@@ -63,24 +67,26 @@ func (sub *Subscriber) register(subscriberID string) error {
 
 	conn := sub.client.GetConnection()
 
-	request := controller_pb.RegisterSubscriberRequest{
+	request := subscriber_manager_pb.RegisterSubscriberRequest{
 		SubscriberID: subscriberID,
+		Name:         name,
+		Type:         subscriberType,
+		Component:    component,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.core.registerSubscriber", msg, time.Second*10)
+	resp, err := conn.Request("gravity.subscriber_manager.registerSubscriber", msg, time.Second*10)
 	if err != nil {
 		return err
 	}
 
-	var reply controller_pb.RegisterSubscriberReply
+	var reply subscriber_manager_pb.RegisterSubscriberReply
 	err = proto.Unmarshal(resp.Data, &reply)
 	if err != nil {
 		return err
 	}
 
 	sub.id = subscriberID
-	sub.channel = reply.Channel
 
 	log.WithFields(logrus.Fields{
 		"id": subscriberID,
@@ -192,7 +198,7 @@ func (sub *Subscriber) Disconnect() {
 	sub.client.Disconnect()
 }
 
-func (sub *Subscriber) Register(subscriberID string) error {
+func (sub *Subscriber) Register(subscriberType subscriber_manager_pb.SubscriberType, component string, subscriberID string, name string) error {
 
 	id := subscriberID
 	if len(id) == 0 {
@@ -200,7 +206,7 @@ func (sub *Subscriber) Register(subscriberID string) error {
 	}
 
 	// Register to get channel id
-	err := sub.register(id)
+	err := sub.register(subscriberType, component, id, name)
 	if err != nil {
 		return err
 	}
