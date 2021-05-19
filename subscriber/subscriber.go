@@ -27,6 +27,8 @@ type Subscriber struct {
 	channel       uint64
 	pipelines     []*Pipeline
 	collectionMap map[string][]string
+
+	tasks chan *Pipeline
 }
 
 func NewSubscriber(options *Options) *Subscriber {
@@ -131,17 +133,21 @@ func (sub *Subscriber) fetch(pipelineID uint64, startAt uint64) (uint64, uint64,
 	return reply.Count, reply.LastSeq, nil
 }
 
-func (sub *Subscriber) poll(pipelineCount uint64) {
+func (sub *Subscriber) startWorker(workerID int) {
 
-	log.Info("Polling events")
+	log.WithFields(logrus.Fields{
+		"worker": workerID,
+	}).Info("Started wroker")
 
 	for {
-		suspend := true
+		select {
+		case pipeline := <-sub.tasks:
 
-		for _, pipeline := range sub.pipelines {
+			// Fetching data from specfic pipeline
 			count, lastSeq, err := sub.fetch(pipeline.id, pipeline.lastSeq)
 			if err != nil {
 				log.WithFields(logrus.Fields{
+					"worker":   workerID,
 					"pipeline": pipeline.id,
 				}).Error(err)
 				continue
@@ -152,16 +158,28 @@ func (sub *Subscriber) poll(pipelineCount uint64) {
 
 			if count > 0 {
 				log.WithFields(logrus.Fields{
+					"worker":   workerID,
 					"pipeline": pipeline.id,
 					"count":    count,
 				}).Info("Received records")
-				suspend = false
 			}
-		}
 
-		if suspend {
-			<-time.After(time.Millisecond * 1000)
+			// re-queue
+			sub.tasks <- pipeline
 		}
+	}
+}
+
+func (sub *Subscriber) prepareWorkers() {
+
+	for i := 0; i < sub.options.WorkerCount; i++ {
+		go sub.startWorker(i)
+	}
+
+	sub.tasks = make(chan *Pipeline, len(sub.pipelines))
+
+	for _, pipeline := range sub.pipelines {
+		sub.tasks <- pipeline
 	}
 }
 
@@ -225,7 +243,8 @@ func (sub *Subscriber) Subscribe(cb MessageHandler) (*Subscription, error) {
 	subscription.start()
 
 	// Start to receive data
-	go sub.poll(count)
+	//go sub.poll(count)
+	sub.prepareWorkers()
 
 	return subscription, nil
 }
