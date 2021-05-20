@@ -37,31 +37,6 @@ func (sub *Controller) Disconnect() {
 	sub.client.Disconnect()
 }
 
-func (sub *Controller) GetPipelineCount() (uint64, error) {
-
-	conn := sub.client.GetConnection()
-
-	request := pb.GetPipelineCountRequest{}
-	msg, _ := proto.Marshal(&request)
-
-	resp, err := conn.Request("gravity.core.getPipelineCount", msg, time.Second*10)
-	if err != nil {
-		return 0, err
-	}
-
-	var reply pb.GetPipelineCountReply
-	err = proto.Unmarshal(resp.Data, &reply)
-	if err != nil {
-		return 0, err
-	}
-
-	if !reply.Success {
-		return 0, errors.New(reply.Reason)
-	}
-
-	return reply.Count, nil
-}
-
 func (sub *Controller) SubscribeToCollections(subscriberID string, collections []string) error {
 
 	conn := sub.client.GetConnection()

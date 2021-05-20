@@ -107,3 +107,58 @@ func (sm *SynchronizerManager) GetSynchronizers() ([]*Synchronizer, error) {
 
 	return synchronizers, nil
 }
+
+func (sm *SynchronizerManager) ReleasePipelines(synchronizerID string, pipelines []uint64) error {
+
+	conn := sm.client.GetConnection()
+
+	request := synchronizer_manager_pb.ReleasePipelinesRequest{
+		SynchronizerID: synchronizerID,
+		Pipelines:      pipelines,
+	}
+	msg, _ := proto.Marshal(&request)
+
+	resp, err := conn.Request("gravity.synchronizer_manager.releasePipelines", msg, time.Second*10)
+	if err != nil {
+		return err
+	}
+
+	var reply synchronizer_manager_pb.ReleasePipelinesReply
+	err = proto.Unmarshal(resp.Data, &reply)
+	if err != nil {
+		return err
+	}
+
+	if !reply.Success {
+		return errors.New(reply.Reason)
+	}
+
+	return nil
+}
+
+func (sm *SynchronizerManager) GetPipelines(synchronizerID string) ([]uint64, error) {
+
+	conn := sm.client.GetConnection()
+
+	request := synchronizer_manager_pb.GetPipelinesRequest{
+		SynchronizerID: synchronizerID,
+	}
+	msg, _ := proto.Marshal(&request)
+
+	resp, err := conn.Request("gravity.synchronizer_manager.getPipelines", msg, time.Second*10)
+	if err != nil {
+		return nil, err
+	}
+
+	var reply synchronizer_manager_pb.GetPipelinesReply
+	err = proto.Unmarshal(resp.Data, &reply)
+	if err != nil {
+		return nil, err
+	}
+
+	if !reply.Success {
+		return nil, errors.New(reply.Reason)
+	}
+
+	return reply.Pipelines, nil
+}

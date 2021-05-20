@@ -9,6 +9,7 @@ import (
 	synchronizer_pb "github.com/BrobridgeOrg/gravity-api/service/synchronizer"
 	"github.com/BrobridgeOrg/gravity-sdk/controller"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
+	"github.com/BrobridgeOrg/gravity-sdk/pipeline_manager"
 	"github.com/golang/protobuf/proto"
 	nats "github.com/nats-io/nats.go"
 	uuid "github.com/satori/go.uuid"
@@ -216,17 +217,6 @@ func (sub *Subscriber) Register(subscriberType subscriber_manager_pb.SubscriberT
 
 func (sub *Subscriber) Subscribe(cb MessageHandler) (*Subscription, error) {
 
-	// Getting pipeline count
-	ctl := controller.NewControllerWithClient(sub.client, controller.NewOptions())
-	count, err := ctl.GetPipelineCount()
-	if err != nil {
-		return nil, err
-	}
-
-	log.WithFields(logrus.Fields{
-		"count": count,
-	}).Info("Getting pipeline count")
-
 	channel := fmt.Sprintf("gravity.subscriber.%s", sub.id)
 
 	log.WithFields(logrus.Fields{
@@ -258,8 +248,8 @@ func (sub *Subscriber) Subscribe(cb MessageHandler) (*Subscription, error) {
 func (sub *Subscriber) GetPipelineCount() (uint64, error) {
 
 	// Getting pipeline count
-	ctl := controller.NewControllerWithClient(sub.client, controller.NewOptions())
-	return ctl.GetPipelineCount()
+	pm := pipeline_manager.NewPipelineManagerWithClient(sub.client, pipeline_manager.NewOptions())
+	return pm.GetPipelineCount()
 }
 
 func (sub *Subscriber) AddAllPipelines() error {
