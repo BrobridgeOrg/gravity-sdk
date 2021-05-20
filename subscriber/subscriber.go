@@ -7,9 +7,9 @@ import (
 
 	subscriber_manager_pb "github.com/BrobridgeOrg/gravity-api/service/subscriber_manager"
 	synchronizer_pb "github.com/BrobridgeOrg/gravity-api/service/synchronizer"
-	"github.com/BrobridgeOrg/gravity-sdk/controller"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
 	"github.com/BrobridgeOrg/gravity-sdk/pipeline_manager"
+	"github.com/BrobridgeOrg/gravity-sdk/subscriber_manager"
 	"github.com/golang/protobuf/proto"
 	nats "github.com/nats-io/nats.go"
 	uuid "github.com/satori/go.uuid"
@@ -303,8 +303,8 @@ func (sub *Subscriber) SubscribeToCollections(colMap map[string][]string) error 
 	}
 
 	// Call controller to subscribe
-	ctl := controller.NewControllerWithClient(sub.client, controller.NewOptions())
-	return ctl.SubscribeToCollections(sub.id, collections)
+	sm := subscriber_manager.NewSubscriberManagerWithClient(sub.client, subscriber_manager.NewOptions())
+	return sm.SubscribeToCollections(sub.id, collections)
 }
 
 func (sub *Subscriber) GetCollectionInfo(collection string) []string {

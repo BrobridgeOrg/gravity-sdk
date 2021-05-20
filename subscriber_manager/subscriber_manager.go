@@ -83,3 +83,31 @@ func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 
 	return subscribers, nil
 }
+
+func (sm *SubscriberManager) SubscribeToCollections(subscriberID string, collections []string) error {
+
+	conn := sm.client.GetConnection()
+
+	request := subscriber_manager_pb.SubscribeToCollectionsRequest{
+		SubscriberID: subscriberID,
+		Collections:  collections,
+	}
+	msg, _ := proto.Marshal(&request)
+
+	resp, err := conn.Request("gravity.subscriber_manager.subscribeToCollections", msg, time.Second*10)
+	if err != nil {
+		return err
+	}
+
+	var reply subscriber_manager_pb.SubscribeToCollectionsReply
+	err = proto.Unmarshal(resp.Data, &reply)
+	if err != nil {
+		return err
+	}
+
+	if !reply.Success {
+		return errors.New(reply.Reason)
+	}
+
+	return nil
+}
