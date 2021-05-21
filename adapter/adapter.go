@@ -6,15 +6,18 @@ import (
 	"os"
 	"time"
 
+	adapter_manager_pb "github.com/BrobridgeOrg/gravity-api/service/adapter_manager"
 	dsa "github.com/BrobridgeOrg/gravity-api/service/dsa"
 	"github.com/BrobridgeOrg/gravity-sdk/core"
 	"github.com/golang/protobuf/proto"
+	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 )
 
 var log = logrus.New()
 
 type AdapterConnector struct {
+	id      string
 	client  *core.Client
 	options *Options
 	buffer  *RequestBuffer
@@ -59,6 +62,41 @@ func (ac *AdapterConnector) startPublisher() {
 	}
 }
 
+func (ac *AdapterConnector) register(component string, adapterID string, name string) error {
+
+	log.WithFields(logrus.Fields{
+		"id": adapterID,
+	}).Info("Registering adapter")
+
+	conn := ac.client.GetConnection()
+
+	request := adapter_manager_pb.RegisterAdapterRequest{
+		AdapterID: adapterID,
+		Name:      name,
+		Component: component,
+	}
+	msg, _ := proto.Marshal(&request)
+
+	resp, err := conn.Request("gravity.adapter_manager.register", msg, time.Second*10)
+	if err != nil {
+		return err
+	}
+
+	var reply adapter_manager_pb.RegisterAdapterReply
+	err = proto.Unmarshal(resp.Data, &reply)
+	if err != nil {
+		return err
+	}
+
+	ac.id = adapterID
+
+	log.WithFields(logrus.Fields{
+		"id": adapterID,
+	}).Info("Adapter was registered")
+
+	return nil
+}
+
 func (ac *AdapterConnector) publish(requests []*Request) error {
 
 	var done int32 = 0
@@ -88,6 +126,21 @@ func (ac *AdapterConnector) Connect(host string, options *core.Options) error {
 
 func (ac *AdapterConnector) Disconnect() error {
 	return ac.Disconnect()
+}
+
+func (ac *AdapterConnector) Register(component string, adapterID string, name string) error {
+
+	id := adapterID
+	if len(id) == 0 {
+		id = uuid.NewV1().String()
+	}
+
+	err := ac.register(component, id, name)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (ac *AdapterConnector) BatchPublish(requests []*Request) (bool, int32, error) {

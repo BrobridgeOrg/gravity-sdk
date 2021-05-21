@@ -206,7 +206,6 @@ func (sub *Subscriber) Register(subscriberType subscriber_manager_pb.SubscriberT
 		id = uuid.NewV1().String()
 	}
 
-	// Register to get channel id
 	err := sub.register(subscriberType, component, id, name)
 	if err != nil {
 		return err
