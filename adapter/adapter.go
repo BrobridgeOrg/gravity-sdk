@@ -3,28 +3,48 @@ package adapter
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	dsa "github.com/BrobridgeOrg/gravity-api/service/dsa"
+	"github.com/BrobridgeOrg/gravity-sdk/core"
 	"github.com/golang/protobuf/proto"
-	nats "github.com/nats-io/nats.go"
+	"github.com/sirupsen/logrus"
 )
 
+var log = logrus.New()
+
 type AdapterConnector struct {
-	host     string
-	options  *Options
-	eventbus *EventBus
-	buffer   *RequestBuffer
+	client  *core.Client
+	options *Options
+	buffer  *RequestBuffer
 }
 
-func NewAdapterConnector() *AdapterConnector {
+func NewAdapterConnector(options *Options) *AdapterConnector {
+
+	log.Out = os.Stdout
+	log.SetLevel(logrus.ErrorLevel)
+
+	if options.Verbose {
+		log.SetLevel(logrus.InfoLevel)
+	}
+
 	ac := &AdapterConnector{
-		buffer: NewRequestBuffer(1000),
+		options: options,
+		buffer:  NewRequestBuffer(options.BatchSize),
 	}
 
 	go ac.startPublisher()
 
 	return ac
+}
+
+func NewAdapterConnectorWithClient(client *core.Client, options *Options) *AdapterConnector {
+
+	subscriber := NewAdapterConnector(options)
+	subscriber.client = client
+
+	return subscriber
 }
 
 func (ac *AdapterConnector) startPublisher() {
@@ -60,41 +80,10 @@ func (ac *AdapterConnector) publish(requests []*Request) error {
 	}
 }
 
-func (ac *AdapterConnector) Connect(host string, options *Options) error {
+func (ac *AdapterConnector) Connect(host string, options *core.Options) error {
 
-	ac.buffer.SetSize(options.BatchSize)
-	ac.host = host
-	ac.options = options
-
-	opts := EventBusOptions{
-		PingInterval:        time.Duration(options.PingInterval),
-		MaxPingsOutstanding: options.MaxPingsOutstanding,
-		MaxReconnects:       options.MaxReconnects,
-	}
-
-	// Create a new instance connector
-	ac.eventbus = NewEventBus(
-		host,
-		EventBusHandler{
-			Reconnect: func(natsConn *nats.Conn) {
-				// re-connected to event server
-				ac.options.ReconnectHandler()
-			},
-			Disconnect: func(natsConn *nats.Conn) {
-				// event server was disconnected
-				ac.options.DisconnectHandler()
-			},
-		},
-		opts,
-	)
-
-	// Connect to server
-	err := ac.eventbus.Connect()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	ac.client = core.NewClient()
+	return ac.client.Connect(host, options)
 }
 
 func (ac *AdapterConnector) Disconnect() error {
@@ -119,7 +108,7 @@ func (ac *AdapterConnector) BatchPublish(requests []*Request) (bool, int32, erro
 	}
 
 	// Send
-	connection := ac.eventbus.GetConnection()
+	connection := ac.client.GetConnection()
 	reqMsg, _ := proto.Marshal(request)
 	resp, err := connection.Request("gravity.dsa.batch", reqMsg, time.Second*30)
 	if err != nil {

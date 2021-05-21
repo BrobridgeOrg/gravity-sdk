@@ -9,6 +9,7 @@ type Options struct {
 	MaxReconnects       int
 	ReconnectHandler    func()
 	DisconnectHandler   func()
+	Verbose             bool
 }
 
 func NewOptions() *Options {
@@ -19,5 +20,6 @@ func NewOptions() *Options {
 		MaxReconnects:       -1,
 		ReconnectHandler:    func() {},
 		DisconnectHandler:   func() {},
+		Verbose:             false,
 	}
 }
