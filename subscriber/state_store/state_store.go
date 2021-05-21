@@ -4,15 +4,16 @@ import (
 	"sync"
 
 	broton "github.com/BrobridgeOrg/broton"
+	"github.com/BrobridgeOrg/gravity-sdk/core/store"
 	gravity_subscriber "github.com/BrobridgeOrg/gravity-sdk/subscriber"
 )
 
 type StateStore struct {
-	options     *Options
-	storeEngine *broton.Broton
-	store       *broton.Store
-	collections sync.Map
-	pipelines   map[uint64]*PipelineState
+	options      *Options
+	gravityStore *store.Store
+	store        *broton.Store
+	collections  sync.Map
+	pipelines    map[uint64]*PipelineState
 }
 
 func NewStateStore(options *Options) *StateStore {
@@ -22,25 +23,34 @@ func NewStateStore(options *Options) *StateStore {
 	}
 }
 
+func NewStateStoreWithStore(gravityStore *store.Store, options *Options) *StateStore {
+
+	ss := NewStateStore(options)
+	ss.gravityStore = gravityStore
+	return ss
+}
+
 func (ss *StateStore) Initialize() error {
 
-	es, err := broton.NewBroton(ss.options.StoreOptions)
-	if err != nil {
-		return err
-	}
+	if ss.gravityStore == nil {
+		gravityStore, err := store.NewStore(ss.options.Core)
+		if err != nil {
+			return err
+		}
 
-	ss.storeEngine = es
+		ss.gravityStore = gravityStore
+	}
 
 	// Initializing store
-	store, err := es.GetStore("gravity_state_store")
+	s, err := ss.gravityStore.GetEngine().GetStore("gravity_state_store")
 	if err != nil {
 		return err
 	}
 
-	ss.store = store
+	ss.store = s
 
 	// Initializing columns
-	err = store.RegisterColumns([]string{"pipeline"})
+	err = s.RegisterColumns([]string{"pipeline"})
 	if err != nil {
 		return err
 	}

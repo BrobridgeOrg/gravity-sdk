@@ -1,13 +1,13 @@
 package state_store
 
-import broton "github.com/BrobridgeOrg/broton"
+import "github.com/BrobridgeOrg/gravity-sdk/core/store"
 
 type Options struct {
-	StoreOptions *broton.Options
+	Core *store.Options
 }
 
 func NewOptions() *Options {
 	return &Options{
-		StoreOptions: broton.NewOptions(),
+		Core: store.NewOptions(),
 	}
 }
