@@ -42,7 +42,11 @@ func (ss *StateStore) Initialize() error {
 	}
 
 	// Initializing store
-	s, err := ss.gravityStore.GetEngine().GetStore("gravity_state_store")
+	storeName := "gravity_state_store"
+	if len(ss.options.Name) > 0 {
+		storeName = "gravity_state_store_" + ss.options.Name
+	}
+	s, err := ss.gravityStore.GetEngine().GetStore(storeName)
 	if err != nil {
 		return err
 	}
