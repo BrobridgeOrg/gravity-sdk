@@ -272,17 +272,19 @@ func (sub *Subscriber) AddAllPipelines() error {
 
 func (sub *Subscriber) AddPipeline(pipeline *Pipeline) error {
 
-	pipelineState, err := sub.options.StateStore.GetPipelineState(pipeline.id)
-	if err != nil {
-		return err
-	}
+	if sub.options.StateStore != nil {
+		pipelineState, err := sub.options.StateStore.GetPipelineState(pipeline.id)
+		if err != nil {
+			return err
+		}
 
-	// Load state
-	log.WithFields(logrus.Fields{
-		"pipeline": pipeline.id,
-		"lastSeq":  pipelineState.GetLastSequence(),
-	}).Info("Loaded pipeline state")
-	pipeline.UpdateLastSequence(pipelineState.GetLastSequence())
+		// Load state
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+			"lastSeq":  pipelineState.GetLastSequence(),
+		}).Info("Loaded pipeline state")
+		pipeline.UpdateLastSequence(pipelineState.GetLastSequence())
+	}
 
 	sub.pipelines = append(sub.pipelines, pipeline)
 	return nil
