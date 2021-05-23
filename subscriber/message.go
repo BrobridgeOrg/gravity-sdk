@@ -26,5 +26,9 @@ func (msg *Message) Ack() {
 		pipelineState.UpdateLastSequence(msg.Event.Sequence)
 	}
 
+	// Snapshot
+	if msg.Event.Type == gravity_sdk_types_event.Event_SNAPSHOT {
+	}
+
 	messagePool.Put(msg)
 }

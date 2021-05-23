@@ -3,7 +3,15 @@ syntax = "proto3";
 package gravity.sdk.types.event;
 
 message Event {
+
+  enum Type {
+    EVENT = 0;
+    SNAPSHOT = 1;
+  }
+
   uint64 pipelineID = 1;
   uint64 sequence = 2;
   bytes data = 3;
+  Type type = 4;
+  string snapshotID = 5;
 }

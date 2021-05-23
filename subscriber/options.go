@@ -6,14 +6,24 @@ type Options struct {
 	ChunkSize   int
 	Verbose     bool
 	StateStore  StateStore
+	InitialLoad InitialLoadOptions
+}
+
+type InitialLoadOptions struct {
+	Enabled      bool
+	OmittedCount uint64
 }
 
 func NewOptions() *Options {
-	return &Options{
+	options := &Options{
 		WorkerCount: 4,
 		BufferSize:  20480,
 		ChunkSize:   2048,
 		Verbose:     false,
 		StateStore:  nil,
 	}
+
+	options.InitialLoad.OmittedCount = 100000
+
+	return options
 }

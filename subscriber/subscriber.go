@@ -6,7 +6,6 @@ import (
 	"time"
 
 	subscriber_manager_pb "github.com/BrobridgeOrg/gravity-api/service/subscriber_manager"
-	synchronizer_pb "github.com/BrobridgeOrg/gravity-api/service/synchronizer"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
 	"github.com/BrobridgeOrg/gravity-sdk/pipeline_manager"
 	"github.com/BrobridgeOrg/gravity-sdk/subscriber_manager"
@@ -96,50 +95,6 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 	return nil
 }
 
-func (sub *Subscriber) fetch(pipelineID uint64, startAt uint64) (uint64, uint64, error) {
-
-	conn := sub.client.GetConnection()
-
-	// Fetch events from pipelines
-	channel := fmt.Sprintf("gravity.pipeline.%d.fetch", pipelineID)
-	/*
-		log.WithFields(logrus.Fields{
-			"pipeline": pipelineID,
-		}).Info("Fetching data from pipeline")
-	*/
-	request := synchronizer_pb.PipelineFetchRequest{
-		SubscriberID: sub.id,
-		PipelineID:   pipelineID,
-		StartAt:      startAt,
-		Offset:       1,
-		Count:        int64(sub.options.ChunkSize),
-	}
-
-	if startAt == 0 {
-		request.Offset = 0
-	}
-
-	msg, _ := proto.Marshal(&request)
-
-	resp, err := conn.Request(channel, msg, time.Second*10)
-	if err != nil {
-		return 0, startAt, err
-	}
-
-	var reply synchronizer_pb.PipelineFetchReply
-	err = proto.Unmarshal(resp.Data, &reply)
-	if err != nil {
-		return 0, startAt, err
-	}
-
-	if !reply.Success {
-		log.Error(reply.Reason)
-		return 0, startAt, err
-	}
-
-	return reply.Count, reply.LastSeq, nil
-}
-
 func (sub *Subscriber) startWorker(workerID int) {
 
 	log.WithFields(logrus.Fields{
@@ -151,24 +106,14 @@ func (sub *Subscriber) startWorker(workerID int) {
 		case pipeline := <-sub.tasks:
 
 			// Fetching data from specfic pipeline
-			count, lastSeq, err := sub.fetch(pipeline.id, pipeline.lastSeq)
+			err := pipeline.Pull()
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"worker":   workerID,
 					"pipeline": pipeline.id,
 				}).Error(err)
+				sub.tasks <- pipeline
 				continue
-			}
-
-			// Update pipeline state
-			pipeline.lastSeq = lastSeq
-
-			if count > 0 {
-				log.WithFields(logrus.Fields{
-					"worker":   workerID,
-					"pipeline": pipeline.id,
-					"count":    count,
-				}).Info("Received records")
 			}
 
 			// re-queue
@@ -238,7 +183,6 @@ func (sub *Subscriber) Subscribe(cb MessageHandler) (*Subscription, error) {
 	subscription.start()
 
 	// Start to receive data
-	//go sub.poll(count)
 	sub.prepareWorkers()
 
 	return subscription, nil
@@ -260,7 +204,7 @@ func (sub *Subscriber) AddAllPipelines() error {
 	}
 
 	for i := uint64(0); i < count; i++ {
-		pipeline := NewPipeline(i, 0)
+		pipeline := NewPipeline(sub, i, 0)
 		err := sub.AddPipeline(pipeline)
 		if err != nil {
 			return err
