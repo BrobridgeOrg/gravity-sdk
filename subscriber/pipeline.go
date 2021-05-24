@@ -35,6 +35,10 @@ func (pipeline *Pipeline) UpdateLastSequence(sequence uint64) {
 
 func (pipeline *Pipeline) initializeState() error {
 
+	log.WithFields(logrus.Fields{
+		"pipeline": pipeline.id,
+	}).Info("Initializing pipeline states")
+
 	conn := pipeline.subscriber.client.GetConnection()
 
 	// Fetch events from pipelines
@@ -79,10 +83,23 @@ func (pipeline *Pipeline) performInitialLoad() error {
 		// TODO: check states
 		//pipeline.subscriber.options.InitialLoad.OmittedCount
 
-		// Create a new snapshot
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Info("Preparing snapshot")
+
+		// Initializing snapshot
 		snapshot := NewSnapshot(pipeline)
 		pipeline.snapshot = snapshot
-		err = snapshot.Create()
+	}
+
+	if pipeline.snapshot != nil && !pipeline.snapshot.isReady {
+
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Info("Creating snapshot")
+
+		// Create a new snapshot
+		err := pipeline.snapshot.Create()
 		if err != nil {
 			return err
 		}
@@ -160,7 +177,7 @@ func (pipeline *Pipeline) Pull() error {
 		}
 
 		pipeline.isInitialized = true
-		//pipeline.isReady = true
+		pipeline.isReady = true
 	}
 
 	if pipeline.isReady {
