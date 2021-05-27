@@ -3,10 +3,9 @@ module github.com/BrobridgeOrg/gravity-sdk
 go 1.15
 
 require (
-	github.com/BrobridgeOrg/EventStore v0.0.5
 	github.com/BrobridgeOrg/broton v0.0.3
-	github.com/BrobridgeOrg/gravity-api v0.2.14
-	github.com/cfsghost/parallel-chunked-flow v0.0.3
+	github.com/BrobridgeOrg/gravity-api v0.2.15
+	github.com/cfsghost/parallel-chunked-flow v0.0.6
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.4.2
 	github.com/jinzhu/copier v0.3.0
