@@ -25,7 +25,7 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 		BufferSize: bufferSize,
 		ChunkSize:  1024,
 		ChunkCount: 128,
-		Handler: func(data interface{}, output chan interface{}) {
+		Handler: func(data interface{}, output func(interface{})) {
 
 			// Parsing event
 			var event gravity_sdk_types_event.Event
@@ -42,7 +42,7 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 			msg.Subscription = subscription
 			msg.Event = &event
 
-			output <- msg
+			output(msg)
 		},
 	}
 
