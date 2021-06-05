@@ -2,6 +2,7 @@ package gravity_sdk_types_projection
 
 import (
 	"bytes"
+	"encoding/json"
 	"sync"
 
 	gravity_sdk_types_record "github.com/BrobridgeOrg/gravity-sdk/types/record"
@@ -51,28 +52,44 @@ func Unmarshal(data []byte, pj *Projection) error {
 	return nil
 }
 
+func Marshal(pj *Projection) ([]byte, error) {
+	return jsonLib.Marshal(pj)
+}
+
+func (pj *Projection) GetPayload() map[string]interface{} {
+
+	payload := make(map[string]interface{}, len(pj.Fields))
+
+	for _, field := range pj.Fields {
+		switch field.Value.(type) {
+		case json.Number:
+			if n, err := field.Value.(json.Number).Int64(); err == nil {
+				payload[field.Name] = n
+			} else if f, err := field.Value.(json.Number).Float64(); err == nil {
+				payload[field.Name] = f
+			}
+		case jsoniter.Number:
+			if n, err := field.Value.(jsoniter.Number).Int64(); err == nil {
+				payload[field.Name] = n
+			} else if f, err := field.Value.(jsoniter.Number).Float64(); err == nil {
+				payload[field.Name] = f
+			}
+		default:
+			payload[field.Name] = field.Value
+		}
+	}
+
+	return payload
+}
+
 func (pj *Projection) ToJSON() ([]byte, error) {
 
 	// Allocation
 	result := pool.Get().(*JSONResult)
 	result.EventName = pj.EventName
 	result.Collection = pj.Collection
-	result.Payload = make(map[string]interface{})
 	result.Meta = pj.Meta
-
-	for _, field := range pj.Fields {
-		switch field.Value.(type) {
-		case jsoniter.Number:
-
-			if n, err := field.Value.(jsoniter.Number).Int64(); err == nil {
-				result.Payload[field.Name] = n
-			} else if f, err := field.Value.(jsoniter.Number).Float64(); err == nil {
-				result.Payload[field.Name] = f
-			}
-		default:
-			result.Payload[field.Name] = field.Value
-		}
-	}
+	result.Payload = pj.GetPayload()
 
 	data, err := jsonLib.Marshal(result)
 

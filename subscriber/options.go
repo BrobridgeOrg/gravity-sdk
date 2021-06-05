@@ -23,6 +23,7 @@ func NewOptions() *Options {
 		StateStore:  nil,
 	}
 
+	options.InitialLoad.Enabled = false
 	options.InitialLoad.OmittedCount = 100000
 
 	return options

@@ -29,10 +29,10 @@ type Subscriber struct {
 	host          string
 	options       *Options
 	id            string
-	pipelines     []*Pipeline
+	pipelines     map[uint64]*Pipeline
 	collectionMap map[string][]string
-
-	tasks chan *Pipeline
+	subscription  *Subscription
+	scheduler     *Scheduler
 }
 
 func NewSubscriber(options *Options) *Subscriber {
@@ -44,11 +44,15 @@ func NewSubscriber(options *Options) *Subscriber {
 		log.SetLevel(logrus.InfoLevel)
 	}
 
-	return &Subscriber{
+	subscriber := &Subscriber{
 		options:       options,
-		pipelines:     make([]*Pipeline, 0),
+		pipelines:     make(map[uint64]*Pipeline),
 		collectionMap: make(map[string][]string),
 	}
+
+	subscriber.subscription = NewSubscription(subscriber, options.BufferSize)
+
+	return subscriber
 }
 
 func NewSubscriberWithClient(client *core.Client, options *Options) *Subscriber {
@@ -95,46 +99,6 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 	return nil
 }
 
-func (sub *Subscriber) startWorker(workerID int) {
-
-	log.WithFields(logrus.Fields{
-		"worker": workerID,
-	}).Info("Started wroker")
-
-	for {
-		select {
-		case pipeline := <-sub.tasks:
-
-			// Fetching data from specfic pipeline
-			err := pipeline.Pull()
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"worker":   workerID,
-					"pipeline": pipeline.id,
-				}).Error(err)
-				sub.tasks <- pipeline
-				continue
-			}
-
-			// re-queue
-			sub.tasks <- pipeline
-		}
-	}
-}
-
-func (sub *Subscriber) prepareWorkers() {
-
-	for i := 0; i < sub.options.WorkerCount; i++ {
-		go sub.startWorker(i)
-	}
-
-	sub.tasks = make(chan *Pipeline, len(sub.pipelines))
-
-	for _, pipeline := range sub.pipelines {
-		sub.tasks <- pipeline
-	}
-}
-
 func (sub *Subscriber) Connect(host string, options *core.Options) error {
 	sub.client = core.NewClient()
 	return sub.client.Connect(host, options)
@@ -151,41 +115,51 @@ func (sub *Subscriber) Register(subscriberType subscriber_manager_pb.SubscriberT
 		id = uuid.NewV1().String()
 	}
 
+	// Register subscriber ID
 	err := sub.register(subscriberType, component, id, name)
 	if err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (sub *Subscriber) Subscribe(cb MessageHandler) (*Subscription, error) {
-
+	// Subscribe to channel
 	channel := fmt.Sprintf("gravity.subscriber.%s", sub.id)
 
 	log.WithFields(logrus.Fields{
 		"channel": channel,
 	}).Info("Subscribe to synchonizer")
 
-	subscription := NewSubscription(sub, sub.options.BufferSize)
-	subscription.callback = cb
-
 	// Subscribe to channel
 	conn := sub.client.GetConnection()
 	s, err := conn.Subscribe(channel, func(m *nats.Msg) {
-		subscription.buffer.Push(m.Data)
+		sub.subscription.buffer.Push(m.Data)
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	subscription.sub = s
-	subscription.start()
+	sub.subscription.sub = s
+	sub.subscription.start()
 
-	// Start to receive data
-	sub.prepareWorkers()
+	return nil
+}
 
-	return subscription, nil
+func (sub *Subscriber) Start() {
+
+	// Initializing Scheduler
+	sub.scheduler = NewScheduler(len(sub.pipelines), sub.options.WorkerCount)
+	sub.scheduler.Initialize()
+
+	for _, pipeline := range sub.pipelines {
+		sub.scheduler.AddPipeline(pipeline)
+	}
+}
+
+func (sub *Subscriber) SetEventHandler(cb MessageHandler) {
+	sub.subscription.eventHandler = cb
+}
+
+func (sub *Subscriber) SetSnapshotHandler(cb MessageHandler) {
+	sub.subscription.snapshotHandler = cb
 }
 
 func (sub *Subscriber) GetPipelineCount() (uint64, error) {
@@ -226,11 +200,18 @@ func (sub *Subscriber) AddPipeline(pipeline *Pipeline) error {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
 			"lastSeq":  pipelineState.GetLastSequence(),
-		}).Info("Loaded pipeline state")
+		}).Info("Loaded pipeline state from store")
 		pipeline.UpdateLastSequence(pipelineState.GetLastSequence())
 	}
 
-	sub.pipelines = append(sub.pipelines, pipeline)
+	// Initializing pipeline
+	err := pipeline.initialize()
+	if err != nil {
+		return err
+	}
+
+	sub.pipelines[pipeline.id] = pipeline
+
 	return nil
 }
 
@@ -259,4 +240,22 @@ func (sub *Subscriber) GetCollectionInfo(collection string) []string {
 	}
 
 	return tables
+}
+
+func (sub *Subscriber) GetPipeline(pipelineID uint64) *Pipeline {
+
+	pipeline, ok := sub.pipelines[pipelineID]
+	if ok {
+		return pipeline
+	}
+
+	return nil
+}
+
+func (sub *Subscriber) AwakePipeline(pipelineID uint64) {
+	sub.scheduler.Awake(pipelineID)
+}
+
+func (sub *Subscriber) ReleasePipeline(pipelineID uint64) {
+	sub.scheduler.Idle(pipelineID)
 }
