@@ -98,7 +98,7 @@ func (scheduler *Scheduler) Awake(pipelineID uint64) {
 		return
 	}
 
-	if taskState.state == SchedulerTaskState_Idle {
+	if taskState.state != SchedulerTaskState_Suspend {
 		return
 	}
 

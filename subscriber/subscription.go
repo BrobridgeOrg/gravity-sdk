@@ -94,6 +94,9 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 				}).Info("Received awake event")
 
 				subscriber.AwakePipeline(event.SystemInfo.AwakeMessage.PipelineID)
+
+				messagePool.Put(msg)
+				return
 			}
 
 			done(msg)
