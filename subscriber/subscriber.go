@@ -99,6 +99,37 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 	return nil
 }
 
+func (sub *Subscriber) healthCheck() error {
+
+	conn := sub.client.GetConnection()
+
+	// Fetch events from pipelines
+	channel := fmt.Sprintf("gravity.subscriber_manager.healthCheck")
+	request := subscriber_manager_pb.HealthCheckRequest{
+		SubscriberID: sub.id,
+	}
+
+	msg, _ := proto.Marshal(&request)
+
+	resp, err := conn.Request(channel, msg, time.Second*10)
+	if err != nil {
+		return err
+	}
+
+	var reply subscriber_manager_pb.HealthCheckReply
+	err = proto.Unmarshal(resp.Data, &reply)
+	if err != nil {
+		return err
+	}
+
+	if !reply.Success {
+		log.Error(reply.Reason)
+		return err
+	}
+
+	return nil
+}
+
 func (sub *Subscriber) Connect(host string, options *core.Options) error {
 	sub.client = core.NewClient()
 	return sub.client.Connect(host, options)
@@ -152,6 +183,17 @@ func (sub *Subscriber) Start() {
 	for _, pipeline := range sub.pipelines {
 		sub.scheduler.AddPipeline(pipeline)
 	}
+
+	go func() {
+		for {
+			err := sub.healthCheck()
+			if err != nil {
+				log.Error(err)
+			}
+
+			<-time.After(time.Second * 30)
+		}
+	}()
 }
 
 func (sub *Subscriber) SetEventHandler(cb MessageHandler) {

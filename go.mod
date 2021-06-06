@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/BrobridgeOrg/broton v0.0.3
-	github.com/BrobridgeOrg/gravity-api v0.2.16
+	github.com/BrobridgeOrg/gravity-api v0.2.17
 	github.com/cfsghost/parallel-chunked-flow v0.0.6
 	github.com/golang/protobuf v1.4.2
 	github.com/json-iterator/go v1.1.10

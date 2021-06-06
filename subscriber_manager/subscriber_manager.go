@@ -8,6 +8,7 @@ import (
 	subscriber_manager_pb "github.com/BrobridgeOrg/gravity-api/service/subscriber_manager"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	"github.com/sirupsen/logrus"
 )
 
@@ -73,11 +74,13 @@ func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 
 	subscribers := make([]*Subscriber, 0, len(reply.Subscribers))
 	for _, sub := range reply.Subscribers {
+		lastCheck, _ := ptypes.Timestamp(sub.LastCheck)
 		subscribers = append(subscribers, &Subscriber{
 			ID:        sub.SubscriberID,
 			Name:      sub.Name,
 			Component: sub.Component,
 			Type:      sub.Type,
+			LastCheck: lastCheck,
 		})
 	}
 
