@@ -223,7 +223,7 @@ func (snapshot *Snapshot) Pull() (int64, error) {
 		"snapshot":   snapshot.id,
 		"collection": request.Collection,
 		"count":      reply.Count,
-	}).Info("Receicing data from snapshot")
+	}).Info("Receiving data from snapshot")
 
 	collectionSnapshot.lastKey = reply.LastKey
 

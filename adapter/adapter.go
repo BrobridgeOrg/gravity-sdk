@@ -9,6 +9,7 @@ import (
 	adapter_manager_pb "github.com/BrobridgeOrg/gravity-api/service/adapter_manager"
 	dsa "github.com/BrobridgeOrg/gravity-api/service/dsa"
 	"github.com/BrobridgeOrg/gravity-sdk/core"
+	buffered_input "github.com/cfsghost/buffered-input"
 	"github.com/golang/protobuf/proto"
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
@@ -20,7 +21,8 @@ type AdapterConnector struct {
 	id      string
 	client  *core.Client
 	options *Options
-	buffer  *RequestBuffer
+	//	buffer  *RequestBuffer
+	buffer *buffered_input.BufferedInput
 }
 
 func NewAdapterConnector(options *Options) *AdapterConnector {
@@ -34,10 +36,18 @@ func NewAdapterConnector(options *Options) *AdapterConnector {
 
 	ac := &AdapterConnector{
 		options: options,
-		buffer:  NewRequestBuffer(options.BatchSize),
+		//		buffer:  NewRequestBuffer(options.BatchSize),
 	}
 
-	go ac.startPublisher()
+	// Initializing buffered input
+	opts := buffered_input.NewOptions()
+	opts.ChunkSize = 1000
+	opts.ChunkCount = 1000
+	opts.Timeout = 50 * time.Millisecond
+	opts.Handler = ac.chunkHandler
+	ac.buffer = buffered_input.NewBufferedInput(opts)
+
+	//	go ac.startPublisher()
 
 	return ac
 }
@@ -50,6 +60,7 @@ func NewAdapterConnectorWithClient(client *core.Client, options *Options) *Adapt
 	return subscriber
 }
 
+/*
 func (ac *AdapterConnector) startPublisher() {
 
 	for {
@@ -61,7 +72,7 @@ func (ac *AdapterConnector) startPublisher() {
 		}
 	}
 }
-
+*/
 func (ac *AdapterConnector) register(component string, adapterID string, name string) error {
 
 	log.WithFields(logrus.Fields{
@@ -118,6 +129,16 @@ func (ac *AdapterConnector) publish(requests []*Request) error {
 	}
 }
 
+func (ac *AdapterConnector) chunkHandler(chunk []interface{}) {
+
+	requests := make([]*Request, 0, len(chunk))
+	for _, request := range chunk {
+		requests = append(requests, request.(*Request))
+	}
+
+	ac.publish(requests)
+}
+
 func (ac *AdapterConnector) Connect(host string, options *core.Options) error {
 
 	ac.client = core.NewClient()
@@ -126,6 +147,10 @@ func (ac *AdapterConnector) Connect(host string, options *core.Options) error {
 
 func (ac *AdapterConnector) Disconnect() error {
 	return ac.Disconnect()
+}
+
+func (ac *AdapterConnector) Release() {
+	ac.buffer.Close()
 }
 
 func (ac *AdapterConnector) Register(component string, adapterID string, name string) error {

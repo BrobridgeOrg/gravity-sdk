@@ -60,9 +60,6 @@ func (scheduler *Scheduler) startWorker(workerID int) {
 				taskState.SetState(SchedulerTaskState_Suspend)
 				continue
 			}
-
-			// re-queue
-			scheduler.idle <- pipeline
 		}
 	}
 }
