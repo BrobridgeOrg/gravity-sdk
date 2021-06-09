@@ -49,16 +49,26 @@ func (sm *SynchronizerManager) Disconnect() {
 	sm.client.Disconnect()
 }
 
+func (sm *SynchronizerManager) GetEndpoint() (*core.Endpoint, error) {
+	return sm.client.ConnectToEndpoint(sm.options.Endpoint, sm.options.Domain, nil)
+}
+
 func (sm *SynchronizerManager) Register(synchronizerID string) error {
 
-	conn := sm.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := sm.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
+	conn := endpoint.GetConnection()
 
 	request := synchronizer_manager_pb.RegisterSynchronizerRequest{
 		SynchronizerID: synchronizerID,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.synchronizer_manager.register", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("synchronizer_manager.register"), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
@@ -78,12 +88,18 @@ func (sm *SynchronizerManager) Register(synchronizerID string) error {
 
 func (sm *SynchronizerManager) GetSynchronizers() ([]*Synchronizer, error) {
 
-	conn := sm.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := sm.GetEndpoint()
+	if err != nil {
+		return nil, err
+	}
+
+	conn := endpoint.GetConnection()
 
 	request := synchronizer_manager_pb.GetSynchronizersRequest{}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.synchronizer_manager.getSynchronizers", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("synchronizer_manager.getSynchronizers"), msg, time.Second*10)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +126,13 @@ func (sm *SynchronizerManager) GetSynchronizers() ([]*Synchronizer, error) {
 
 func (sm *SynchronizerManager) ReleasePipelines(synchronizerID string, pipelines []uint64) error {
 
-	conn := sm.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := sm.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
+	conn := endpoint.GetConnection()
 
 	request := synchronizer_manager_pb.ReleasePipelinesRequest{
 		SynchronizerID: synchronizerID,
@@ -118,7 +140,7 @@ func (sm *SynchronizerManager) ReleasePipelines(synchronizerID string, pipelines
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.synchronizer_manager.releasePipelines", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("synchronizer_manager.releasePipelines"), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
@@ -138,14 +160,20 @@ func (sm *SynchronizerManager) ReleasePipelines(synchronizerID string, pipelines
 
 func (sm *SynchronizerManager) GetPipelines(synchronizerID string) ([]uint64, error) {
 
-	conn := sm.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := sm.GetEndpoint()
+	if err != nil {
+		return nil, err
+	}
+
+	conn := endpoint.GetConnection()
 
 	request := synchronizer_manager_pb.GetPipelinesRequest{
 		SynchronizerID: synchronizerID,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.synchronizer_manager.getPipelines", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("synchronizer_manager.getPipelines"), msg, time.Second*10)
 	if err != nil {
 		return nil, err
 	}

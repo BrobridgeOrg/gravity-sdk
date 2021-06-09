@@ -7,13 +7,16 @@ import (
 )
 
 type Client struct {
-	host     string
-	options  *Options
-	eventbus *EventBus
+	host      string
+	options   *Options
+	eventbus  *EventBus
+	endpoints map[string]*Endpoint
 }
 
 func NewClient() *Client {
-	return &Client{}
+	return &Client{
+		endpoints: make(map[string]*Endpoint),
+	}
 }
 
 func (client *Client) Connect(host string, options *Options) error {
@@ -54,6 +57,36 @@ func (client *Client) Connect(host string, options *Options) error {
 
 func (client *Client) Disconnect() {
 	client.eventbus.Close()
+}
+
+func (client *Client) ConnectToEndpoint(name string, domain string, options *EndpointOptions) (*Endpoint, error) {
+
+	// Attempt to get existing endpoint
+	endpoint := client.GetEndpoint(domain)
+	if endpoint != nil {
+		return endpoint, nil
+	}
+
+	// Create a new link to endpoint
+	endpoint = NewEndpoint(client, name, domain, options)
+	client.endpoints[name] = endpoint
+
+	err := endpoint.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	return endpoint, nil
+}
+
+func (client *Client) GetEndpoint(name string) *Endpoint {
+
+	endpoint, ok := client.endpoints[name]
+	if ok {
+		return endpoint
+	}
+
+	return nil
 }
 
 func (client *Client) GetConnection() *nats.Conn {

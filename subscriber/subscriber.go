@@ -26,8 +26,8 @@ type MessageHandler func(*Message)
 
 type Subscriber struct {
 	client        *core.Client
-	host          string
 	options       *Options
+	host          string
 	id            string
 	pipelines     map[uint64]*Pipeline
 	collectionMap map[string][]string
@@ -69,7 +69,13 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 		"id": subscriberID,
 	}).Info("Registering subscriber")
 
-	conn := sub.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := sub.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
+	conn := endpoint.GetConnection()
 
 	request := subscriber_manager_pb.RegisterSubscriberRequest{
 		SubscriberID: subscriberID,
@@ -79,7 +85,7 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.subscriber_manager.registerSubscriber", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("subscriber_manager.registerSubscriber"), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
@@ -101,17 +107,17 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 
 func (sub *Subscriber) healthCheck() error {
 
-	conn := sub.client.GetConnection()
+	endpoint := sub.client.GetEndpoint(sub.options.Endpoint)
+	conn := endpoint.GetConnection()
 
 	// Fetch events from pipelines
-	channel := fmt.Sprintf("gravity.subscriber_manager.healthCheck")
 	request := subscriber_manager_pb.HealthCheckRequest{
 		SubscriberID: sub.id,
 	}
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(channel, msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("subscriber_manager.healthCheck"), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
@@ -139,6 +145,10 @@ func (sub *Subscriber) Disconnect() {
 	sub.client.Disconnect()
 }
 
+func (sub *Subscriber) GetEndpoint() (*core.Endpoint, error) {
+	return sub.client.ConnectToEndpoint(sub.options.Endpoint, sub.options.Domain, nil)
+}
+
 func (sub *Subscriber) Register(subscriberType subscriber_manager_pb.SubscriberType, component string, subscriberID string, name string) error {
 
 	id := subscriberID
@@ -146,14 +156,20 @@ func (sub *Subscriber) Register(subscriberType subscriber_manager_pb.SubscriberT
 		id = uuid.NewV1().String()
 	}
 
+	// Getting endpoint from client object
+	endpoint, err := sub.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
 	// Register subscriber ID
-	err := sub.register(subscriberType, component, id, name)
+	err = sub.register(subscriberType, component, id, name)
 	if err != nil {
 		return err
 	}
 
 	// Subscribe to channel
-	channel := fmt.Sprintf("gravity.subscriber.%s", sub.id)
+	channel := fmt.Sprintf("subscriber.%s", sub.id)
 
 	log.WithFields(logrus.Fields{
 		"channel": channel,
@@ -161,7 +177,7 @@ func (sub *Subscriber) Register(subscriberType subscriber_manager_pb.SubscriberT
 
 	// Subscribe to channel
 	conn := sub.client.GetConnection()
-	s, err := conn.Subscribe(channel, func(m *nats.Msg) {
+	s, err := conn.Subscribe(endpoint.Channel(channel), func(m *nats.Msg) {
 		sub.subscription.buffer.Push(m.Data)
 	})
 	if err != nil {
@@ -271,7 +287,10 @@ func (sub *Subscriber) SubscribeToCollections(colMap map[string][]string) error 
 	}
 
 	// Call controller to subscribe
-	sm := subscriber_manager.NewSubscriberManagerWithClient(sub.client, subscriber_manager.NewOptions())
+	opts := subscriber_manager.NewOptions()
+	opts.Endpoint = sub.options.Endpoint
+	opts.Domain = sub.options.Domain
+	sm := subscriber_manager.NewSubscriberManagerWithClient(sub.client, opts)
 	return sm.SubscribeToCollections(sub.id, collections)
 }
 

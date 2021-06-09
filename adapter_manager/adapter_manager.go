@@ -49,9 +49,19 @@ func (am *AdapterManager) Disconnect() {
 	am.client.Disconnect()
 }
 
+func (am *AdapterManager) GetEndpoint() (*core.Endpoint, error) {
+	return am.client.ConnectToEndpoint(am.options.Endpoint, am.options.Domain, nil)
+}
+
 func (am *AdapterManager) Register(component string, adapterID string, name string) error {
 
-	conn := am.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := am.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
+	conn := endpoint.GetConnection()
 
 	request := adapter_manager_pb.RegisterAdapterRequest{
 		AdapterID: adapterID,
@@ -60,7 +70,7 @@ func (am *AdapterManager) Register(component string, adapterID string, name stri
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.adapter_manager.register", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("adapter_manager.register"), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
@@ -80,14 +90,20 @@ func (am *AdapterManager) Register(component string, adapterID string, name stri
 
 func (am *AdapterManager) Unregister(adapterID string) error {
 
-	conn := am.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := am.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
+	conn := endpoint.GetConnection()
 
 	request := adapter_manager_pb.UnregisterAdapterRequest{
 		AdapterID: adapterID,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.adapter_manager.unregister", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("adapter_manager.unregister"), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
@@ -107,12 +123,18 @@ func (am *AdapterManager) Unregister(adapterID string) error {
 
 func (am *AdapterManager) GetAdapters() ([]*Adapter, error) {
 
-	conn := am.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := am.GetEndpoint()
+	if err != nil {
+		return nil, err
+	}
+
+	conn := endpoint.GetConnection()
 
 	request := adapter_manager_pb.GetAdaptersRequest{}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.adapter_manager.getAdapters", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("adapter_manager.getAdapters"), msg, time.Second*10)
 	if err != nil {
 		return nil, err
 	}

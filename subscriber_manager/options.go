@@ -1,11 +1,15 @@
 package subscriber_manager
 
 type Options struct {
-	Verbose bool
+	Endpoint string
+	Domain   string
+	Verbose  bool
 }
 
 func NewOptions() *Options {
 	return &Options{
-		Verbose: false,
+		Endpoint: "default",
+		Domain:   "gravity",
+		Verbose:  false,
 	}
 }

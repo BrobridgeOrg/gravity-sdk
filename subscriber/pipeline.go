@@ -50,15 +50,21 @@ func (pipeline *Pipeline) getStateFromServer() (*pipeline_pb.GetStateReply, erro
 		"pipeline": pipeline.id,
 	}).Info("Getting pipeline states from server")
 
-	conn := pipeline.subscriber.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := pipeline.subscriber.GetEndpoint()
+	if err != nil {
+		return nil, err
+	}
+
+	conn := endpoint.GetConnection()
 
 	// Fetch events from pipelines
-	channel := fmt.Sprintf("gravity.pipeline.%d.getState", pipeline.id)
+	channel := fmt.Sprintf("pipeline.%d.getState", pipeline.id)
 	request := pipeline_pb.GetStateRequest{}
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(channel, msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
 	if err != nil {
 		return nil, err
 	}
@@ -168,10 +174,16 @@ func (pipeline *Pipeline) performInitialLoad() error {
 
 func (pipeline *Pipeline) fetch() error {
 
-	conn := pipeline.subscriber.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := pipeline.subscriber.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
+	conn := endpoint.GetConnection()
 
 	// Fetch events from pipelines
-	channel := fmt.Sprintf("gravity.pipeline.%d.fetch", pipeline.id)
+	channel := fmt.Sprintf("pipeline.%d.fetch", pipeline.id)
 
 	request := synchronizer_pb.PipelineFetchRequest{
 		SubscriberID: pipeline.subscriber.id,
@@ -187,7 +199,7 @@ func (pipeline *Pipeline) fetch() error {
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(channel, msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
@@ -250,10 +262,11 @@ func (pipeline *Pipeline) Suspend() error {
 		"lastSeq":  pipeline.lastSeq,
 	}).Info("Suspending pipeline")
 
-	conn := pipeline.subscriber.client.GetConnection()
+	endpoint := pipeline.subscriber.client.GetEndpoint(pipeline.subscriber.options.Endpoint)
+	conn := endpoint.GetConnection()
 
 	// Fetch events from pipelines
-	channel := fmt.Sprintf("gravity.pipeline.%d.suspend", pipeline.id)
+	channel := fmt.Sprintf("pipeline.%d.suspend", pipeline.id)
 	request := pipeline_pb.SuspendRequest{
 		SubscriberID: pipeline.subscriber.id,
 		Sequence:     pipeline.lastSeq,
@@ -261,7 +274,7 @@ func (pipeline *Pipeline) Suspend() error {
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(channel, msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
 	if err != nil {
 		return err
 	}

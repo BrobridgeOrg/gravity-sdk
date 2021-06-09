@@ -1,6 +1,8 @@
 package subscriber
 
 type Options struct {
+	Endpoint    string
+	Domain      string
 	WorkerCount int
 	BufferSize  int
 	ChunkSize   int
@@ -16,6 +18,8 @@ type InitialLoadOptions struct {
 
 func NewOptions() *Options {
 	options := &Options{
+		Endpoint:    "default",
+		Domain:      "gravity",
 		WorkerCount: 4,
 		BufferSize:  20480,
 		ChunkSize:   2048,

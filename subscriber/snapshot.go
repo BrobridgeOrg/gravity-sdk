@@ -83,17 +83,23 @@ func (snapshot *Snapshot) UpdateLastKey(collection string, key []byte) error {
 
 func (snapshot *Snapshot) Create() error {
 
-	conn := snapshot.pipeline.subscriber.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := snapshot.pipeline.subscriber.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
+	conn := endpoint.GetConnection()
 
 	// Fetch events from pipelines
-	channel := fmt.Sprintf("gravity.pipeline.%d.createSnapshot", snapshot.pipeline.id)
+	channel := fmt.Sprintf("pipeline.%d.createSnapshot", snapshot.pipeline.id)
 	request := pipeline_pb.CreateSnapshotRequest{
 		SnapshotID: snapshot.id,
 	}
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(channel, msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
@@ -121,17 +127,23 @@ func (snapshot *Snapshot) Close() error {
 		"snapshot": snapshot.id,
 	}).Info("Closing snapshot")
 
-	conn := snapshot.pipeline.subscriber.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := snapshot.pipeline.subscriber.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
+	conn := endpoint.GetConnection()
 
 	// Fetch events from pipelines
-	channel := fmt.Sprintf("gravity.pipeline.%d.releaseSnapshot", snapshot.pipeline.id)
+	channel := fmt.Sprintf("pipeline.%d.releaseSnapshot", snapshot.pipeline.id)
 	request := pipeline_pb.ReleaseSnapshotRequest{
 		SnapshotID: snapshot.id,
 	}
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(channel, msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
@@ -161,10 +173,16 @@ func (snapshot *Snapshot) Pull() (int64, error) {
 		return 0, nil
 	}
 
-	conn := snapshot.pipeline.subscriber.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := snapshot.pipeline.subscriber.GetEndpoint()
+	if err != nil {
+		return 0, err
+	}
+
+	conn := endpoint.GetConnection()
 
 	// Fetch events from pipelines
-	channel := fmt.Sprintf("gravity.pipeline.%d.fetchSnapshot", snapshot.pipeline.id)
+	channel := fmt.Sprintf("pipeline.%d.fetchSnapshot", snapshot.pipeline.id)
 	request := pipeline_pb.FetchSnapshotRequest{
 		SnapshotID:   snapshot.id,
 		SubscriberID: snapshot.pipeline.subscriber.id,
@@ -186,7 +204,7 @@ func (snapshot *Snapshot) Pull() (int64, error) {
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(channel, msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
 	if err != nil {
 		return 0, err
 	}

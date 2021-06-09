@@ -21,8 +21,7 @@ type AdapterConnector struct {
 	id      string
 	client  *core.Client
 	options *Options
-	//	buffer  *RequestBuffer
-	buffer *buffered_input.BufferedInput
+	buffer  *buffered_input.BufferedInput
 }
 
 func NewAdapterConnector(options *Options) *AdapterConnector {
@@ -47,8 +46,6 @@ func NewAdapterConnector(options *Options) *AdapterConnector {
 	opts.Handler = ac.chunkHandler
 	ac.buffer = buffered_input.NewBufferedInput(opts)
 
-	//	go ac.startPublisher()
-
 	return ac
 }
 
@@ -60,19 +57,6 @@ func NewAdapterConnectorWithClient(client *core.Client, options *Options) *Adapt
 	return subscriber
 }
 
-/*
-func (ac *AdapterConnector) startPublisher() {
-
-	for {
-		select {
-		case requests := <-ac.buffer.output:
-			ac.publish(requests)
-		case <-time.After(50 * time.Millisecond):
-			ac.buffer.Flush()
-		}
-	}
-}
-*/
 func (ac *AdapterConnector) register(component string, adapterID string, name string) error {
 
 	log.WithFields(logrus.Fields{
@@ -81,6 +65,12 @@ func (ac *AdapterConnector) register(component string, adapterID string, name st
 
 	conn := ac.client.GetConnection()
 
+	// Attempt to connect to endpoint
+	endpoint, err := ac.client.ConnectToEndpoint(ac.options.Endpoint, ac.options.Domain, nil)
+	if err != nil {
+		return err
+	}
+
 	request := adapter_manager_pb.RegisterAdapterRequest{
 		AdapterID: adapterID,
 		Name:      name,
@@ -88,7 +78,7 @@ func (ac *AdapterConnector) register(component string, adapterID string, name st
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.adapter_manager.register", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("adapter_manager.register"), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
@@ -153,6 +143,10 @@ func (ac *AdapterConnector) Release() {
 	ac.buffer.Close()
 }
 
+func (ac *AdapterConnector) GetEndpoint() (*core.Endpoint, error) {
+	return ac.client.ConnectToEndpoint(ac.options.Endpoint, ac.options.Domain, nil)
+}
+
 func (ac *AdapterConnector) Register(component string, adapterID string, name string) error {
 
 	id := adapterID
@@ -185,10 +179,17 @@ func (ac *AdapterConnector) BatchPublish(requests []*Request) (bool, int32, erro
 		})
 	}
 
-	// Send
-	connection := ac.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := ac.GetEndpoint()
+	if err != nil {
+		return false, 0, err
+	}
+
+	connection := endpoint.GetConnection()
+
+	// Sned
 	reqMsg, _ := proto.Marshal(request)
-	resp, err := connection.Request("gravity.dsa.batch", reqMsg, time.Second*30)
+	resp, err := connection.Request(endpoint.Channel("dsa.batch"), reqMsg, time.Second*30)
 	if err != nil {
 		return false, 0, err
 	}

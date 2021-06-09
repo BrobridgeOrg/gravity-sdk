@@ -50,14 +50,24 @@ func (sm *SubscriberManager) Disconnect() {
 	sm.client.Disconnect()
 }
 
+func (sm *SubscriberManager) GetEndpoint() (*core.Endpoint, error) {
+	return sm.client.ConnectToEndpoint(sm.options.Endpoint, sm.options.Domain, nil)
+}
+
 func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 
-	conn := sm.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := sm.GetEndpoint()
+	if err != nil {
+		return nil, err
+	}
+
+	conn := endpoint.GetConnection()
 
 	request := subscriber_manager_pb.GetSubscribersRequest{}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.subscriber_manager.getSubscribers", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("subscriber_manager.getSubscribers"), msg, time.Second*10)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +99,13 @@ func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 
 func (sm *SubscriberManager) SubscribeToCollections(subscriberID string, collections []string) error {
 
-	conn := sm.client.GetConnection()
+	// Getting endpoint from client object
+	endpoint, err := sm.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
+	conn := endpoint.GetConnection()
 
 	request := subscriber_manager_pb.SubscribeToCollectionsRequest{
 		SubscriberID: subscriberID,
@@ -97,7 +113,7 @@ func (sm *SubscriberManager) SubscribeToCollections(subscriberID string, collect
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request("gravity.subscriber_manager.subscribeToCollections", msg, time.Second*10)
+	resp, err := conn.Request(endpoint.Channel("subscriber_manager.subscribeToCollections"), msg, time.Second*10)
 	if err != nil {
 		return err
 	}
