@@ -45,3 +45,13 @@ func (ps *PipelineState) UpdateLastSequence(lastSeq uint64) error {
 func (ps *PipelineState) GetLastSequence() uint64 {
 	return ps.lastSeq
 }
+
+func (ps *PipelineState) Flush() error {
+
+	cf, err := ps.stateStore.store.GetColumnFamailyHandle("pipeline")
+	if err != nil {
+		return err
+	}
+
+	return cf.Db.Flush()
+}

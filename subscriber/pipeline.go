@@ -292,6 +292,16 @@ func (pipeline *Pipeline) Suspend() error {
 
 	pipeline.isSuspended = true
 
+	// Force to flush
+	pipelineState, _ := pipeline.subscriber.options.StateStore.GetPipelineState(pipeline.id)
+	err = pipelineState.Flush()
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+			"lastSeq":  pipeline.lastSeq,
+		}).Error(err)
+	}
+
 	return nil
 }
 

@@ -8,4 +8,5 @@ type StateStore interface {
 type PipelineState interface {
 	GetLastSequence() uint64
 	UpdateLastSequence(uint64) error
+	Flush() error
 }
