@@ -53,5 +53,10 @@ func (ps *PipelineState) Flush() error {
 		return err
 	}
 
-	return cf.Db.Flush()
+	_, err = cf.Db.AsyncFlush()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
