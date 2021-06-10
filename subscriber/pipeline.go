@@ -76,9 +76,16 @@ func (pipeline *Pipeline) getStateFromServer() (*pipeline_pb.GetStateReply, erro
 	}
 
 	if !reply.Success {
-		log.Error(reply.Reason)
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Error(reply.Reason)
 		return nil, err
 	}
+
+	log.WithFields(logrus.Fields{
+		"pipeline": pipeline.id,
+		"lastSeq":  reply.LastSeq,
+	}).Info("latest pipeline states from server")
 
 	return &reply, nil
 
@@ -156,7 +163,9 @@ func (pipeline *Pipeline) performInitialLoad() error {
 
 		// Write last sequence of snapshot to store
 		if err := pipeline.SaveLastSequence(); err != nil {
-			log.Error(err)
+			log.WithFields(logrus.Fields{
+				"pipeline": pipeline.id,
+			}).Error(err)
 		}
 
 		pipeline.snapshot.Close()
@@ -286,7 +295,9 @@ func (pipeline *Pipeline) Suspend() error {
 	}
 
 	if !reply.Success {
-		log.Error(reply.Reason)
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Error(reply.Reason)
 		return err
 	}
 
