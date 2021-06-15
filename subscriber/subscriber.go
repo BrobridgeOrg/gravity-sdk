@@ -197,6 +197,9 @@ func (sub *Subscriber) Start() {
 	sub.scheduler.Initialize()
 
 	for _, pipeline := range sub.pipelines {
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Info("Added pipeline to scheduler")
 		sub.scheduler.AddPipeline(pipeline)
 	}
 
