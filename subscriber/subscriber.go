@@ -231,6 +231,10 @@ func (sub *Subscriber) GetPipelineCount() (uint64, error) {
 }
 
 func (sub *Subscriber) AddAllPipelines() error {
+	return sub.SubscribeToPipelines(nil)
+}
+
+func (sub *Subscriber) SubscribeToPipelines(pipelines []uint64) error {
 
 	// Getting pipeline count
 	count, err := sub.GetPipelineCount()
@@ -238,8 +242,29 @@ func (sub *Subscriber) AddAllPipelines() error {
 		return err
 	}
 
-	for i := uint64(0); i < count; i++ {
-		pipeline := NewPipeline(sub, i, 0)
+	if pipelines == nil {
+
+		// Subscribe to all pipelines
+		for i := uint64(0); i < count; i++ {
+			pipeline := NewPipeline(sub, i, 0)
+			err := sub.AddPipeline(pipeline)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	// Subscribe to specific pipelines
+	for _, pipelineID := range pipelines {
+		if pipelineID >= count {
+			return fmt.Errorf("No such pipeline: %d", pipelineID)
+		}
+	}
+
+	for _, pipelineID := range pipelines {
+		pipeline := NewPipeline(sub, pipelineID, 0)
 		err := sub.AddPipeline(pipeline)
 		if err != nil {
 			return err
