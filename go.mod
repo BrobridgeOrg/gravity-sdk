@@ -3,8 +3,8 @@ module github.com/BrobridgeOrg/gravity-sdk
 go 1.15
 
 require (
-	github.com/BrobridgeOrg/broton v0.0.6
-	github.com/BrobridgeOrg/gravity-api v0.2.17
+	github.com/BrobridgeOrg/broton v0.0.7
+	github.com/BrobridgeOrg/gravity-api v0.2.18
 	github.com/cfsghost/buffered-input v0.0.1
 	github.com/cfsghost/parallel-chunked-flow v0.0.6
 	github.com/golang/protobuf v1.5.2
