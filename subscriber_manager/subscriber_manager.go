@@ -91,6 +91,7 @@ func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 			Component: sub.Component,
 			Type:      sub.Type,
 			LastCheck: lastCheck,
+			Token:     sub.Token,
 		})
 	}
 

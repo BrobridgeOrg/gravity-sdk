@@ -48,6 +48,7 @@ func NewSubscriber(options *Options) *Subscriber {
 		options:       options,
 		pipelines:     make(map[uint64]*Pipeline),
 		collectionMap: make(map[string][]string),
+		scheduler:     nil,
 	}
 
 	subscriber.subscription = NewSubscription(subscriber, options.BufferSize)
@@ -342,9 +343,18 @@ func (sub *Subscriber) GetPipeline(pipelineID uint64) *Pipeline {
 }
 
 func (sub *Subscriber) AwakePipeline(pipelineID uint64) {
+
+	if sub.scheduler == nil {
+		return
+	}
+
 	sub.scheduler.Awake(pipelineID)
 }
 
 func (sub *Subscriber) ReleasePipeline(pipelineID uint64) {
+
+	if sub.scheduler == nil {
+		return
+	}
 	sub.scheduler.Idle(pipelineID)
 }

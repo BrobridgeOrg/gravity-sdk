@@ -12,4 +12,5 @@ type Subscriber struct {
 	Component string
 	Type      subscriber_manager_pb.SubscriberType
 	LastCheck time.Time
+	Token     string
 }
