@@ -1,6 +1,7 @@
 package subscriber
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -210,28 +211,28 @@ func (pipeline *Pipeline) fetch() error {
 
 	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to fetch: %v", err)
 	}
 
 	var reply synchronizer_pb.PipelineFetchReply
 	err = proto.Unmarshal(resp.Data, &reply)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to fetch: %v", err)
 	}
 
 	if !reply.Success {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
-			"request":  channel,
-		}).Error(reply.Reason)
-		return err
+		}).Errorf("Failed to fetch: %s", reply.Reason)
+		return errors.New(reply.Reason)
 	}
 
 	// No more event so pipeline should be suspended
 	if reply.Count == 0 {
-		if pipeline.Suspend() {
-			return nil
-		}
+
+		// Trying to suspend to prevent infinite loop
+		pipeline.isSuspended = true
+		return nil
 	}
 
 	pipeline.UpdateLastSequence(reply.LastSeq)
@@ -240,7 +241,7 @@ func (pipeline *Pipeline) fetch() error {
 		"pipeline": pipeline.id,
 		"lastSeq":  reply.LastSeq,
 		"count":    reply.Count,
-	}).Info("Fetching event chunk")
+	}).Info("-> Fetching event chunk")
 
 	return nil
 }
@@ -274,10 +275,12 @@ func (pipeline *Pipeline) Suspend() bool {
 	log.WithFields(logrus.Fields{
 		"pipeline": pipeline.id,
 		"lastSeq":  pipeline.lastSeq,
-	}).Info("Suspending pipeline")
+	}).Info("<- Suspending pipeline")
 
 	endpoint := pipeline.subscriber.client.GetEndpoint(pipeline.subscriber.options.Endpoint)
 	conn := endpoint.GetConnection()
+
+	pipeline.isSuspended = false
 
 	// Fetch events from pipelines
 	channel := fmt.Sprintf("pipeline.%d.suspend", pipeline.id)
@@ -292,7 +295,7 @@ func (pipeline *Pipeline) Suspend() bool {
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
-		}).Error(err)
+		}).Errorf("Failed to suspend: %v", err)
 		return false
 	}
 
@@ -301,22 +304,29 @@ func (pipeline *Pipeline) Suspend() bool {
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
-		}).Error(err)
+		}).Errorf("Failed to suspend: %v", err)
 		return false
 	}
 
 	if len(reply.Reason) > 0 {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
-		}).Error(reply.Reason)
+		}).Errorf("Failed to suspend: %s", reply.Reason)
 		return false
 	}
 
 	if !reply.Success {
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Warn("Disallow suscriber to suspend")
 		return false
 	}
 
 	pipeline.isSuspended = true
+
+	log.WithFields(logrus.Fields{
+		"pipeline": pipeline.id,
+	}).Warn("pipeline suspended")
 
 	// Force to flush
 	pipelineState, _ := pipeline.subscriber.options.StateStore.GetPipelineState(pipeline.id)
@@ -325,7 +335,7 @@ func (pipeline *Pipeline) Suspend() bool {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
 			"lastSeq":  pipeline.lastSeq,
-		}).Error(err)
+		}).Errorf("Failed to flush state store: %s", err)
 	}
 
 	return true

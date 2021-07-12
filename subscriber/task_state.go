@@ -30,8 +30,7 @@ func (ts *TaskState) SetState(state SchedulerTaskState) {
 	log.WithFields(logrus.Fields{
 		"pipeline": ts.pipeline.id,
 		"from":     SchedulerTaskState_name[ts.state],
-		"to":       SchedulerTaskState_name[state],
-	}).Info("Switch task state")
+	}).Printf("Switch task state to %s", SchedulerTaskState_name[state])
 
 	ts.state = state
 }

@@ -58,6 +58,14 @@ func (scheduler *Scheduler) startWorker(workerID int) {
 
 			if pipeline.isSuspended {
 				taskState.SetState(SchedulerTaskState_Suspend)
+
+				// disallow pipeline to suspend
+				if !pipeline.Suspend() {
+					// Keep fetching
+					taskState.SetState(SchedulerTaskState_Idle)
+					scheduler.idle <- pipeline
+				}
+
 				continue
 			}
 		}
