@@ -220,13 +220,18 @@ func (pipeline *Pipeline) fetch() error {
 	}
 
 	if !reply.Success {
-		log.Error(reply.Reason)
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+			"request":  channel,
+		}).Error(reply.Reason)
 		return err
 	}
 
 	// No more event so pipeline should be suspended
 	if reply.Count == 0 {
-		return pipeline.Suspend()
+		if pipeline.Suspend() {
+			return nil
+		}
 	}
 
 	pipeline.UpdateLastSequence(reply.LastSeq)
@@ -264,7 +269,7 @@ func (pipeline *Pipeline) Pull() error {
 	return pipeline.fetch()
 }
 
-func (pipeline *Pipeline) Suspend() error {
+func (pipeline *Pipeline) Suspend() bool {
 
 	log.WithFields(logrus.Fields{
 		"pipeline": pipeline.id,
@@ -285,20 +290,30 @@ func (pipeline *Pipeline) Suspend() error {
 
 	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
 	if err != nil {
-		return err
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Error(err)
+		return false
 	}
 
 	var reply pipeline_pb.SuspendReply
 	err = proto.Unmarshal(resp.Data, &reply)
 	if err != nil {
-		return err
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Error(err)
+		return false
 	}
 
-	if !reply.Success {
+	if len(reply.Reason) > 0 {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
 		}).Error(reply.Reason)
-		return err
+		return false
+	}
+
+	if !reply.Success {
+		return false
 	}
 
 	pipeline.isSuspended = true
@@ -313,7 +328,7 @@ func (pipeline *Pipeline) Suspend() error {
 		}).Error(err)
 	}
 
-	return nil
+	return true
 }
 
 func (pipeline *Pipeline) Idle() {

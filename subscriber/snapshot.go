@@ -111,7 +111,7 @@ func (snapshot *Snapshot) Create() error {
 	}
 
 	if !reply.Success {
-		log.Error(reply.Reason)
+		log.Errorf("Faild to create snapshot view: %v", reply.Reason)
 		return err
 	}
 
