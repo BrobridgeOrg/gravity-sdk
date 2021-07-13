@@ -1,6 +1,7 @@
 package core
 
 import (
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -10,13 +11,11 @@ type Client struct {
 	host      string
 	options   *Options
 	eventbus  *EventBus
-	endpoints map[string]*Endpoint
+	endpoints sync.Map
 }
 
 func NewClient() *Client {
-	return &Client{
-		endpoints: make(map[string]*Endpoint),
-	}
+	return &Client{}
 }
 
 func (client *Client) Connect(host string, options *Options) error {
@@ -69,7 +68,7 @@ func (client *Client) ConnectToEndpoint(name string, domain string, options *End
 
 	// Create a new link to endpoint
 	endpoint = NewEndpoint(client, name, domain, options)
-	client.endpoints[name] = endpoint
+	client.endpoints.Store(name, endpoint)
 
 	err := endpoint.Connect()
 	if err != nil {
@@ -81,9 +80,9 @@ func (client *Client) ConnectToEndpoint(name string, domain string, options *End
 
 func (client *Client) GetEndpoint(name string) *Endpoint {
 
-	endpoint, ok := client.endpoints[name]
+	v, ok := client.endpoints.Load(name)
 	if ok {
-		return endpoint
+		return v.(*Endpoint)
 	}
 
 	return nil
