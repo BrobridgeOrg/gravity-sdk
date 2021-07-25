@@ -7,6 +7,7 @@ import (
 
 	subscriber_manager_pb "github.com/BrobridgeOrg/gravity-api/service/subscriber_manager"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
+	"github.com/BrobridgeOrg/gravity-sdk/core/encryption"
 	"github.com/BrobridgeOrg/gravity-sdk/pipeline_manager"
 	"github.com/BrobridgeOrg/gravity-sdk/subscriber_manager"
 	"github.com/golang/protobuf/proto"
@@ -33,6 +34,7 @@ type Subscriber struct {
 	collectionMap map[string][]string
 	subscription  *Subscription
 	scheduler     *Scheduler
+	encryption    *encryption.Encryption
 }
 
 func NewSubscriber(options *Options) *Subscriber {
@@ -49,9 +51,11 @@ func NewSubscriber(options *Options) *Subscriber {
 		pipelines:     make(map[uint64]*Pipeline),
 		collectionMap: make(map[string][]string),
 		scheduler:     nil,
+		encryption:    encryption.NewEncryption(),
 	}
 
 	subscriber.subscription = NewSubscription(subscriber, options.BufferSize)
+	subscriber.encryption.SetKey(options.AppKey)
 
 	return subscriber
 }
@@ -70,29 +74,29 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 		"id": subscriberID,
 	}).Info("Registering subscriber")
 
-	// Getting endpoint from client object
-	endpoint, err := sub.GetEndpoint()
+	// Prepare token
+	token, err := sub.encryption.PrepareToken()
 	if err != nil {
 		return err
 	}
-
-	conn := endpoint.GetConnection()
 
 	request := subscriber_manager_pb.RegisterSubscriberRequest{
 		SubscriberID: subscriberID,
 		Name:         name,
 		Type:         subscriberType,
 		Component:    component,
+		AppID:        sub.options.AppID,
+		Token:        token,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("subscriber_manager.registerSubscriber"), msg, time.Second*10)
+	respData, err := sub.request("subscriber_manager.registerSubscriber", msg, false)
 	if err != nil {
 		return err
 	}
 
 	var reply subscriber_manager_pb.RegisterSubscriberReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return err
 	}
@@ -108,9 +112,6 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 
 func (sub *Subscriber) healthCheck() error {
 
-	endpoint := sub.client.GetEndpoint(sub.options.Endpoint)
-	conn := endpoint.GetConnection()
-
 	// Fetch events from pipelines
 	request := subscriber_manager_pb.HealthCheckRequest{
 		SubscriberID: sub.id,
@@ -118,13 +119,13 @@ func (sub *Subscriber) healthCheck() error {
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("subscriber_manager.healthCheck"), msg, time.Second*10)
+	respData, err := sub.request("subscriber_manager.healthCheck", msg, true)
 	if err != nil {
 		return err
 	}
 
 	var reply subscriber_manager_pb.HealthCheckReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return err
 	}
@@ -319,6 +320,8 @@ func (sub *Subscriber) SubscribeToCollections(colMap map[string][]string) error 
 	opts := subscriber_manager.NewOptions()
 	opts.Endpoint = sub.options.Endpoint
 	opts.Domain = sub.options.Domain
+	opts.AppID = sub.options.AppID
+	opts.AppKey = sub.options.AppKey
 	sm := subscriber_manager.NewSubscriberManagerWithClient(sub.client, opts)
 	return sm.SubscribeToCollections(sub.id, collections)
 }

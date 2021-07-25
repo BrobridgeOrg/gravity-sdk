@@ -3,10 +3,10 @@ package subscriber_manager
 import (
 	"errors"
 	"os"
-	"time"
 
 	subscriber_manager_pb "github.com/BrobridgeOrg/gravity-api/service/subscriber_manager"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
+	"github.com/BrobridgeOrg/gravity-sdk/core/encryption"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/sirupsen/logrus"
@@ -15,8 +15,9 @@ import (
 var log = logrus.New()
 
 type SubscriberManager struct {
-	client  *core.Client
-	options *Options
+	client     *core.Client
+	options    *Options
+	encryption *encryption.Encryption
 }
 
 func NewSubscriberManager(options *Options) *SubscriberManager {
@@ -28,9 +29,14 @@ func NewSubscriberManager(options *Options) *SubscriberManager {
 		log.SetLevel(logrus.InfoLevel)
 	}
 
-	return &SubscriberManager{
-		options: options,
+	sm := &SubscriberManager{
+		options:    options,
+		encryption: encryption.NewEncryption(),
 	}
+
+	sm.encryption.SetKey(options.AppKey)
+
+	return sm
 }
 
 func NewSubscriberManagerWithClient(client *core.Client, options *Options) *SubscriberManager {
@@ -56,24 +62,16 @@ func (sm *SubscriberManager) GetEndpoint() (*core.Endpoint, error) {
 
 func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 
-	// Getting endpoint from client object
-	endpoint, err := sm.GetEndpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	conn := endpoint.GetConnection()
-
 	request := subscriber_manager_pb.GetSubscribersRequest{}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("subscriber_manager.getSubscribers"), msg, time.Second*10)
+	respData, err := sm.request("subscriber_manager.getSubscribers", msg, true)
 	if err != nil {
 		return nil, err
 	}
 
 	var reply subscriber_manager_pb.GetSubscribersReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return nil, err
 	}
@@ -86,12 +84,14 @@ func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 	for _, sub := range reply.Subscribers {
 		lastCheck, _ := ptypes.Timestamp(sub.LastCheck)
 		subscribers = append(subscribers, &Subscriber{
-			ID:        sub.SubscriberID,
-			Name:      sub.Name,
-			Component: sub.Component,
-			Type:      sub.Type,
-			LastCheck: lastCheck,
-			Token:     sub.Token,
+			ID:          sub.SubscriberID,
+			Name:        sub.Name,
+			Component:   sub.Component,
+			Type:        sub.Type,
+			LastCheck:   lastCheck,
+			AppID:       sub.AppID,
+			AccessKey:   sub.AccessKey,
+			Permissions: sub.Permissions,
 		})
 	}
 
@@ -100,27 +100,19 @@ func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 
 func (sm *SubscriberManager) SubscribeToCollections(subscriberID string, collections []string) error {
 
-	// Getting endpoint from client object
-	endpoint, err := sm.GetEndpoint()
-	if err != nil {
-		return err
-	}
-
-	conn := endpoint.GetConnection()
-
 	request := subscriber_manager_pb.SubscribeToCollectionsRequest{
 		SubscriberID: subscriberID,
 		Collections:  collections,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("subscriber_manager.subscribeToCollections"), msg, time.Second*10)
+	respData, err := sm.request("subscriber_manager.subscribeToCollections", msg, true)
 	if err != nil {
 		return err
 	}
 
 	var reply subscriber_manager_pb.SubscribeToCollectionsReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return err
 	}

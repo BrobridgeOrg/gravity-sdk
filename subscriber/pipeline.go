@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	pipeline_pb "github.com/BrobridgeOrg/gravity-api/service/pipeline"
 	synchronizer_pb "github.com/BrobridgeOrg/gravity-api/service/synchronizer"
@@ -51,27 +50,19 @@ func (pipeline *Pipeline) getStateFromServer() (*pipeline_pb.GetStateReply, erro
 		"pipeline": pipeline.id,
 	}).Info("Getting pipeline states from server")
 
-	// Getting endpoint from client object
-	endpoint, err := pipeline.subscriber.GetEndpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	conn := endpoint.GetConnection()
-
 	// Fetch events from pipelines
 	channel := fmt.Sprintf("pipeline.%d.getState", pipeline.id)
 	request := pipeline_pb.GetStateRequest{}
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
+	respData, err := pipeline.subscriber.request(channel, msg, true)
 	if err != nil {
 		return nil, err
 	}
 
 	var reply pipeline_pb.GetStateReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return nil, err
 	}
@@ -184,14 +175,6 @@ func (pipeline *Pipeline) performInitialLoad() error {
 
 func (pipeline *Pipeline) fetch() error {
 
-	// Getting endpoint from client object
-	endpoint, err := pipeline.subscriber.GetEndpoint()
-	if err != nil {
-		return err
-	}
-
-	conn := endpoint.GetConnection()
-
 	// Fetch events from pipelines
 	channel := fmt.Sprintf("pipeline.%d.fetch", pipeline.id)
 
@@ -209,13 +192,13 @@ func (pipeline *Pipeline) fetch() error {
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
+	respData, err := pipeline.subscriber.request(channel, msg, true)
 	if err != nil {
 		return fmt.Errorf("Failed to fetch: %v", err)
 	}
 
 	var reply synchronizer_pb.PipelineFetchReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return fmt.Errorf("Failed to fetch: %v", err)
 	}
@@ -277,9 +260,6 @@ func (pipeline *Pipeline) Suspend() bool {
 		"lastSeq":  pipeline.lastSeq,
 	}).Info("<- Suspending pipeline")
 
-	endpoint := pipeline.subscriber.client.GetEndpoint(pipeline.subscriber.options.Endpoint)
-	conn := endpoint.GetConnection()
-
 	pipeline.isSuspended = false
 
 	// Fetch events from pipelines
@@ -291,7 +271,7 @@ func (pipeline *Pipeline) Suspend() bool {
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
+	respData, err := pipeline.subscriber.request(channel, msg, true)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
@@ -300,7 +280,7 @@ func (pipeline *Pipeline) Suspend() bool {
 	}
 
 	var reply pipeline_pb.SuspendReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,

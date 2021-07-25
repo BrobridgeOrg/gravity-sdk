@@ -8,9 +8,12 @@ import (
 func TestEncryption(t *testing.T) {
 
 	en := NewEncryption()
-	en.Key = "TestingKEY01234567890123456789AB"
+	en.SetKey("TestingKey")
 
-	data := en.Encrypt([]byte("test"))
+	data, err := en.Encrypt([]byte("test"))
+	if err != nil {
+		t.Error(err)
+	}
 
 	if bytes.Compare(data, []byte("test")) == 0 {
 		t.Fail()

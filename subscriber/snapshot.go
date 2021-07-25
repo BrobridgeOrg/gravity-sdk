@@ -3,7 +3,6 @@ package subscriber
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	pipeline_pb "github.com/BrobridgeOrg/gravity-api/service/pipeline"
 	"github.com/golang/protobuf/proto"
@@ -83,14 +82,6 @@ func (snapshot *Snapshot) UpdateLastKey(collection string, key []byte) error {
 
 func (snapshot *Snapshot) Create() error {
 
-	// Getting endpoint from client object
-	endpoint, err := snapshot.pipeline.subscriber.GetEndpoint()
-	if err != nil {
-		return err
-	}
-
-	conn := endpoint.GetConnection()
-
 	// Fetch events from pipelines
 	channel := fmt.Sprintf("pipeline.%d.createSnapshot", snapshot.pipeline.id)
 	request := pipeline_pb.CreateSnapshotRequest{
@@ -99,13 +90,13 @@ func (snapshot *Snapshot) Create() error {
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
+	respData, err := snapshot.pipeline.subscriber.request(channel, msg, true)
 	if err != nil {
 		return err
 	}
 
 	var reply pipeline_pb.CreateSnapshotReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return err
 	}
@@ -127,14 +118,6 @@ func (snapshot *Snapshot) Close() error {
 		"snapshot": snapshot.id,
 	}).Info("Closing snapshot")
 
-	// Getting endpoint from client object
-	endpoint, err := snapshot.pipeline.subscriber.GetEndpoint()
-	if err != nil {
-		return err
-	}
-
-	conn := endpoint.GetConnection()
-
 	// Fetch events from pipelines
 	channel := fmt.Sprintf("pipeline.%d.releaseSnapshot", snapshot.pipeline.id)
 	request := pipeline_pb.ReleaseSnapshotRequest{
@@ -143,13 +126,13 @@ func (snapshot *Snapshot) Close() error {
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
+	respData, err := snapshot.pipeline.subscriber.request(channel, msg, true)
 	if err != nil {
 		return err
 	}
 
 	var reply pipeline_pb.ReleaseSnapshotReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return err
 	}
@@ -172,14 +155,6 @@ func (snapshot *Snapshot) Pull() (int64, error) {
 		snapshot.isCompleted = true
 		return 0, nil
 	}
-
-	// Getting endpoint from client object
-	endpoint, err := snapshot.pipeline.subscriber.GetEndpoint()
-	if err != nil {
-		return 0, err
-	}
-
-	conn := endpoint.GetConnection()
 
 	// Fetch events from pipelines
 	channel := fmt.Sprintf("pipeline.%d.fetchSnapshot", snapshot.pipeline.id)
@@ -204,13 +179,13 @@ func (snapshot *Snapshot) Pull() (int64, error) {
 
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel(channel), msg, time.Second*10)
+	respData, err := snapshot.pipeline.subscriber.request(channel, msg, true)
 	if err != nil {
 		return 0, err
 	}
 
 	var reply pipeline_pb.FetchSnapshotReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return 0, err
 	}

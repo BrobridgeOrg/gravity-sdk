@@ -7,10 +7,12 @@ import (
 )
 
 type Subscriber struct {
-	ID        string
-	Name      string
-	Component string
-	Type      subscriber_manager_pb.SubscriberType
-	LastCheck time.Time
-	Token     string
+	ID          string
+	Name        string
+	Component   string
+	Type        subscriber_manager_pb.SubscriberType
+	LastCheck   time.Time
+	AppID       string
+	AccessKey   string
+	Permissions []string
 }

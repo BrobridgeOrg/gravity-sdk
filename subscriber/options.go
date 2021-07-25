@@ -3,6 +3,8 @@ package subscriber
 type Options struct {
 	Endpoint    string
 	Domain      string
+	AppID       string
+	AppKey      string
 	WorkerCount int
 	BufferSize  int
 	ChunkSize   int
@@ -20,6 +22,8 @@ func NewOptions() *Options {
 	options := &Options{
 		Endpoint:    "default",
 		Domain:      "gravity",
+		AppID:       "",
+		AppKey:      "",
 		WorkerCount: 4,
 		BufferSize:  20480,
 		ChunkSize:   2048,

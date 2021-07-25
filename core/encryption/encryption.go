@@ -1,23 +1,42 @@
 package encryption
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"io"
 )
 
+var tokenPayload = []byte("Brobridge")
+
 type Encryption struct {
-	Key string
+	enabled bool
+	key     []byte
 }
 
 func NewEncryption() *Encryption {
 	return &Encryption{}
 }
 
+func (encryption *Encryption) SetKey(key string) {
+	if len(key) == 0 {
+		return
+	}
+
+	hash := sha256.Sum256([]byte(key))
+	encryption.key = hash[:]
+	encryption.enabled = true
+}
+
 func (encryption *Encryption) Encrypt(data []byte) ([]byte, error) {
 
-	block, err := aes.NewCipher([]byte(encryption.Key))
+	if !encryption.enabled {
+		return data, nil
+	}
+
+	block, err := aes.NewCipher(encryption.key)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +58,11 @@ func (encryption *Encryption) Encrypt(data []byte) ([]byte, error) {
 
 func (encryption *Encryption) Decrypt(data []byte) ([]byte, error) {
 
-	block, err := aes.NewCipher([]byte(encryption.Key))
+	if !encryption.enabled {
+		return data, nil
+	}
+
+	block, err := aes.NewCipher([]byte(encryption.key))
 	if err != nil {
 		return nil, err
 	}
@@ -60,4 +83,21 @@ func (encryption *Encryption) Decrypt(data []byte) ([]byte, error) {
 	}
 
 	return plaintext, nil
+}
+
+func (encryption *Encryption) PrepareToken() ([]byte, error) {
+	return encryption.Encrypt(tokenPayload)
+}
+
+func (encryption *Encryption) ValidateToken(token []byte) bool {
+	data, err := encryption.Decrypt(token)
+	if err != nil {
+		return false
+	}
+
+	if bytes.Compare(data, tokenPayload) != 0 {
+		return false
+	}
+
+	return true
 }
