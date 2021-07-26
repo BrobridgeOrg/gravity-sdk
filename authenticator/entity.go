@@ -1,4 +1,4 @@
-package auth
+package authenticator
 
 import (
 	"encoding/json"
@@ -7,10 +7,10 @@ import (
 )
 
 type Entity struct {
-	AppID      string
-	AppName    string
-	AccessKey  string
-	Properties map[string]interface{}
+	AppID      string                 `json:"appID"`
+	AppName    string                 `json:"appName"`
+	AccessKey  string                 `json:"accessKey"`
+	Properties map[string]interface{} `json:"props"`
 }
 
 func NewEntity() *Entity {
