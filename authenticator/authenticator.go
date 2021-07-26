@@ -126,6 +126,33 @@ func (auth *Authenticator) CreateEntity(entity *Entity) error {
 	return nil
 }
 
+func (auth *Authenticator) UpdateEntity(entity *Entity) error {
+
+	// Prepare request
+	request := authenticator_pb.UpdateEntityRequest{
+		AppID:  entity.AppID,
+		Entity: ConvertEntityToProto(entity),
+	}
+	msg, _ := proto.Marshal(&request)
+
+	respData, err := auth.request("createEntity", msg, true)
+	if err != nil {
+		return err
+	}
+
+	var reply authenticator_pb.UpdateEntityReply
+	err = proto.Unmarshal(respData, &reply)
+	if err != nil {
+		return err
+	}
+
+	if !reply.Success {
+		return errors.New(reply.Reason)
+	}
+
+	return nil
+}
+
 func (auth *Authenticator) UpdateEntityKey(appID string, key string) error {
 
 	// Prepare request
@@ -161,7 +188,7 @@ func (auth *Authenticator) DeleteEntity(appID string) error {
 	}
 	msg, _ := proto.Marshal(&request)
 
-	respData, err := auth.request("deleteEntityKey", msg, true)
+	respData, err := auth.request("deleteEntity", msg, true)
 	if err != nil {
 		return err
 	}
@@ -203,4 +230,37 @@ func (auth *Authenticator) GetEntity(appID string) (*Entity, error) {
 	}
 
 	return ParseEntityProto(reply.Entity)
+}
+
+func (auth *Authenticator) GetEntities(startID string, count int32) ([]*Entity, int32, error) {
+
+	// Prepare request
+	request := authenticator_pb.GetEntitiesRequest{
+		StartID: startID,
+		Count:   count,
+	}
+	msg, _ := proto.Marshal(&request)
+
+	respData, err := auth.request("getEntity", msg, true)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var reply authenticator_pb.GetEntitiesReply
+	err = proto.Unmarshal(respData, &reply)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if !reply.Success {
+		return nil, 0, errors.New(reply.Reason)
+	}
+
+	entities := make([]*Entity, 0)
+	for _, entity := range reply.Entities {
+		entry, _ := ParseEntityProto(entity)
+		entities = append(entities, entry)
+	}
+
+	return entities, reply.Total, nil
 }
