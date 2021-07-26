@@ -28,7 +28,7 @@ func (auth *Authenticator) request(method string, data []byte, encrypted bool) (
 
 	// Preparing packet
 	packet := packet_pb.Packet{
-		AppID:   "auth",
+		AppID:   auth.options.AppID,
 		Payload: data,
 	}
 

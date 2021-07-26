@@ -7,15 +7,18 @@ type Options struct {
 	Domain    string
 	Verbose   bool
 	Channel   string
+	AppID     string
 	AccessKey string
 }
 
 func NewOptions() *Options {
 	return &Options{
-		Endpoint: "default",
-		Domain:   "gravity",
-		Verbose:  false,
-		Channel:  "",
+		Endpoint:  "default",
+		Domain:    "gravity",
+		Verbose:   false,
+		Channel:   "",
+		AppID:     "gravity",
+		AccessKey: "",
 	}
 }
 
