@@ -1,6 +1,8 @@
 package keyring
 
-import "sync"
+import (
+	"sync"
+)
 
 type Permission struct {
 	permissions []string

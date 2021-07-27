@@ -22,6 +22,8 @@ func NewEncryption() *Encryption {
 
 func (encryption *Encryption) SetKey(key string) {
 	if len(key) == 0 {
+		encryption.key = []byte("")
+		encryption.enabled = false
 		return
 	}
 

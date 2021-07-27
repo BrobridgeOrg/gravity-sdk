@@ -3,7 +3,6 @@ package synchronizer_manager
 import (
 	"errors"
 	"os"
-	"time"
 
 	synchronizer_manager_pb "github.com/BrobridgeOrg/gravity-api/service/synchronizer_manager"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
@@ -27,9 +26,11 @@ func NewSynchronizerManager(options *Options) *SynchronizerManager {
 		log.SetLevel(logrus.InfoLevel)
 	}
 
-	return &SynchronizerManager{
+	sm := &SynchronizerManager{
 		options: options,
 	}
+
+	return sm
 }
 
 func NewSynchronizerManagerWithClient(client *core.Client, options *Options) *SynchronizerManager {
@@ -55,26 +56,18 @@ func (sm *SynchronizerManager) GetEndpoint() (*core.Endpoint, error) {
 
 func (sm *SynchronizerManager) Register(synchronizerID string) error {
 
-	// Getting endpoint from client object
-	endpoint, err := sm.GetEndpoint()
-	if err != nil {
-		return err
-	}
-
-	conn := endpoint.GetConnection()
-
 	request := synchronizer_manager_pb.RegisterSynchronizerRequest{
 		SynchronizerID: synchronizerID,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("synchronizer_manager.register"), msg, time.Second*10)
+	respData, err := sm.request("synchronizer_manager.register", msg, true)
 	if err != nil {
 		return err
 	}
 
 	var reply synchronizer_manager_pb.RegisterSynchronizerReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return err
 	}
@@ -88,24 +81,16 @@ func (sm *SynchronizerManager) Register(synchronizerID string) error {
 
 func (sm *SynchronizerManager) GetSynchronizers() ([]*Synchronizer, error) {
 
-	// Getting endpoint from client object
-	endpoint, err := sm.GetEndpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	conn := endpoint.GetConnection()
-
 	request := synchronizer_manager_pb.GetSynchronizersRequest{}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("synchronizer_manager.getSynchronizers"), msg, time.Second*10)
+	respData, err := sm.request("synchronizer_manager.getSynchronizers", msg, true)
 	if err != nil {
 		return nil, err
 	}
 
 	var reply synchronizer_manager_pb.GetSynchronizersReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return nil, err
 	}
@@ -126,27 +111,19 @@ func (sm *SynchronizerManager) GetSynchronizers() ([]*Synchronizer, error) {
 
 func (sm *SynchronizerManager) ReleasePipelines(synchronizerID string, pipelines []uint64) error {
 
-	// Getting endpoint from client object
-	endpoint, err := sm.GetEndpoint()
-	if err != nil {
-		return err
-	}
-
-	conn := endpoint.GetConnection()
-
 	request := synchronizer_manager_pb.ReleasePipelinesRequest{
 		SynchronizerID: synchronizerID,
 		Pipelines:      pipelines,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("synchronizer_manager.releasePipelines"), msg, time.Second*10)
+	respData, err := sm.request("synchronizer_manager.releasePipelines", msg, true)
 	if err != nil {
 		return err
 	}
 
 	var reply synchronizer_manager_pb.ReleasePipelinesReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return err
 	}
@@ -160,26 +137,18 @@ func (sm *SynchronizerManager) ReleasePipelines(synchronizerID string, pipelines
 
 func (sm *SynchronizerManager) GetPipelines(synchronizerID string) ([]uint64, error) {
 
-	// Getting endpoint from client object
-	endpoint, err := sm.GetEndpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	conn := endpoint.GetConnection()
-
 	request := synchronizer_manager_pb.GetPipelinesRequest{
 		SynchronizerID: synchronizerID,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("synchronizer_manager.getPipelines"), msg, time.Second*10)
+	respData, err := sm.request("synchronizer_manager.getPipelines", msg, true)
 	if err != nil {
 		return nil, err
 	}
 
 	var reply synchronizer_manager_pb.GetPipelinesReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return nil, err
 	}

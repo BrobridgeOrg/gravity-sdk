@@ -6,7 +6,6 @@ import (
 
 	subscriber_manager_pb "github.com/BrobridgeOrg/gravity-api/service/subscriber_manager"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
-	"github.com/BrobridgeOrg/gravity-sdk/core/encryption"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/sirupsen/logrus"
@@ -15,9 +14,8 @@ import (
 var log = logrus.New()
 
 type SubscriberManager struct {
-	client     *core.Client
-	options    *Options
-	encryption *encryption.Encryption
+	client  *core.Client
+	options *Options
 }
 
 func NewSubscriberManager(options *Options) *SubscriberManager {
@@ -30,11 +28,8 @@ func NewSubscriberManager(options *Options) *SubscriberManager {
 	}
 
 	sm := &SubscriberManager{
-		options:    options,
-		encryption: encryption.NewEncryption(),
+		options: options,
 	}
-
-	sm.encryption.SetKey(options.AppKey)
 
 	return sm
 }

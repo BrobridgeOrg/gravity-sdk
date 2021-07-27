@@ -7,7 +7,6 @@ import (
 
 	subscriber_manager_pb "github.com/BrobridgeOrg/gravity-api/service/subscriber_manager"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
-	"github.com/BrobridgeOrg/gravity-sdk/core/encryption"
 	"github.com/BrobridgeOrg/gravity-sdk/pipeline_manager"
 	"github.com/BrobridgeOrg/gravity-sdk/subscriber_manager"
 	"github.com/golang/protobuf/proto"
@@ -34,7 +33,6 @@ type Subscriber struct {
 	collectionMap map[string][]string
 	subscription  *Subscription
 	scheduler     *Scheduler
-	encryption    *encryption.Encryption
 }
 
 func NewSubscriber(options *Options) *Subscriber {
@@ -51,11 +49,9 @@ func NewSubscriber(options *Options) *Subscriber {
 		pipelines:     make(map[uint64]*Pipeline),
 		collectionMap: make(map[string][]string),
 		scheduler:     nil,
-		encryption:    encryption.NewEncryption(),
 	}
 
 	subscriber.subscription = NewSubscription(subscriber, options.BufferSize)
-	subscriber.encryption.SetKey(options.AppKey)
 
 	return subscriber
 }
@@ -75,7 +71,8 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 	}).Info("Registering subscriber")
 
 	// Prepare token
-	token, err := sub.encryption.PrepareToken()
+	key := sub.options.Key
+	token, err := key.Encryption().PrepareToken()
 	if err != nil {
 		return err
 	}
@@ -85,7 +82,7 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 		Name:         name,
 		Type:         subscriberType,
 		Component:    component,
-		AppID:        sub.options.AppID,
+		AppID:        key.GetAppID(),
 		Token:        token,
 	}
 	msg, _ := proto.Marshal(&request)
@@ -228,7 +225,10 @@ func (sub *Subscriber) SetSnapshotHandler(cb MessageHandler) {
 func (sub *Subscriber) GetPipelineCount() (uint64, error) {
 
 	// Getting pipeline count
-	pm := pipeline_manager.NewPipelineManagerWithClient(sub.client, pipeline_manager.NewOptions())
+	opts := pipeline_manager.NewOptions()
+	opts.Verbose = true
+	opts.Key = sub.options.Key
+	pm := pipeline_manager.NewPipelineManagerWithClient(sub.client, opts)
 	return pm.GetPipelineCount()
 }
 
@@ -318,11 +318,12 @@ func (sub *Subscriber) SubscribeToCollections(colMap map[string][]string) error 
 
 	// Call controller to subscribe
 	opts := subscriber_manager.NewOptions()
+	opts.Verbose = sub.options.Verbose
 	opts.Endpoint = sub.options.Endpoint
 	opts.Domain = sub.options.Domain
-	opts.AppID = sub.options.AppID
-	opts.AppKey = sub.options.AppKey
+	opts.Key = sub.options.Key
 	sm := subscriber_manager.NewSubscriberManagerWithClient(sub.client, opts)
+
 	return sm.SubscribeToCollections(sub.id, collections)
 }
 

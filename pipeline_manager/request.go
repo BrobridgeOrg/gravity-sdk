@@ -1,4 +1,4 @@
-package subscriber
+package pipeline_manager
 
 import (
 	"time"
@@ -7,16 +7,16 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-func (sub *Subscriber) request(method string, data []byte, encrypted bool) ([]byte, error) {
+func (pm *PipelineManager) request(method string, data []byte, encrypted bool) ([]byte, error) {
 
 	// Getting endpoint from client object
-	endpoint, err := sub.GetEndpoint()
+	endpoint, err := pm.GetEndpoint()
 	if err != nil {
 		return []byte(""), err
 	}
 
 	conn := endpoint.GetConnection()
-	key := sub.options.Key
+	key := pm.options.Key
 
 	// Preparing packet
 	packet := packet_pb.Packet{

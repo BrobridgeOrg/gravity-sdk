@@ -7,9 +7,27 @@ import (
 )
 
 type KeyInfo struct {
+	appID      string
 	encryption *encryption.Encryption
 	permission *Permission
 	ref        int
+}
+
+func NewKey(appID string, key string) *KeyInfo {
+
+	en := encryption.NewEncryption()
+	en.SetKey(key)
+
+	return &KeyInfo{
+		appID:      appID,
+		encryption: en,
+		permission: NewPermission(),
+		ref:        0,
+	}
+}
+
+func (info *KeyInfo) GetAppID() string {
+	return info.appID
 }
 
 func (info *KeyInfo) Encryption() *encryption.Encryption {
@@ -28,17 +46,16 @@ func NewKeyring() *Keyring {
 	return &Keyring{}
 }
 
+func (keyring *Keyring) AddKey(key *KeyInfo) {
+
+	key.ref++
+	keyring.apps.Store(key.appID, key)
+}
+
 func (keyring *Keyring) Put(appID string, key string) *KeyInfo {
-	en := encryption.NewEncryption()
-	en.SetKey(key)
 
-	info := &KeyInfo{
-		encryption: en,
-		permission: NewPermission(),
-		ref:        1,
-	}
-
-	keyring.apps.Store(appID, info)
+	info := NewKey(appID, key)
+	keyring.AddKey(info)
 
 	return info
 }

@@ -16,15 +16,17 @@ func (sm *SubscriberManager) request(method string, data []byte, encrypted bool)
 	}
 
 	conn := endpoint.GetConnection()
+	key := sm.options.Key
 
 	// Preparing packet
 	packet := packet_pb.Packet{
+		AppID:   key.GetAppID(),
 		Payload: data,
 	}
 
 	// Encrypt
 	if encrypted {
-		payload, err := sm.encryption.Encrypt(data)
+		payload, err := key.Encryption().Encrypt(data)
 		if err != nil {
 			return []byte(""), err
 		}
@@ -42,7 +44,7 @@ func (sm *SubscriberManager) request(method string, data []byte, encrypted bool)
 
 	// Decrypt
 	if encrypted {
-		data, err = sm.encryption.Decrypt(resp.Data)
+		data, err = key.Encryption().Decrypt(resp.Data)
 		if err != nil {
 			return []byte(""), err
 		}

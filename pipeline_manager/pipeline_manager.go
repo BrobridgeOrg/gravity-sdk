@@ -3,7 +3,6 @@ package pipeline_manager
 import (
 	"errors"
 	"os"
-	"time"
 
 	pb "github.com/BrobridgeOrg/gravity-api/service/pipeline_manager"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
@@ -27,9 +26,11 @@ func NewPipelineManager(options *Options) *PipelineManager {
 		log.SetLevel(logrus.InfoLevel)
 	}
 
-	return &PipelineManager{
+	pm := &PipelineManager{
 		options: options,
 	}
+
+	return pm
 }
 
 func NewPipelineManagerWithClient(client *core.Client, options *Options) *PipelineManager {
@@ -55,24 +56,16 @@ func (pm *PipelineManager) GetEndpoint() (*core.Endpoint, error) {
 
 func (pm *PipelineManager) GetPipelineCount() (uint64, error) {
 
-	// Getting endpoint from client object
-	endpoint, err := pm.GetEndpoint()
-	if err != nil {
-		return 0, err
-	}
-
-	conn := endpoint.GetConnection()
-
 	request := pb.GetPipelineCountRequest{}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("pipeline_manager.getCount"), msg, time.Second*10)
+	respData, err := pm.request("pipeline_manager.getCount", msg, true)
 	if err != nil {
 		return 0, err
 	}
 
 	var reply pb.GetPipelineCountReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return 0, err
 	}
