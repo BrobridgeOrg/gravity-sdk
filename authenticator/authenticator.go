@@ -135,7 +135,7 @@ func (auth *Authenticator) UpdateEntity(entity *Entity) error {
 	}
 	msg, _ := proto.Marshal(&request)
 
-	respData, err := auth.request("createEntity", msg, true)
+	respData, err := auth.request("updateEntity", msg, true)
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ func (auth *Authenticator) GetEntities(startID string, count int32) ([]*Entity, 
 	}
 	msg, _ := proto.Marshal(&request)
 
-	respData, err := auth.request("getEntity", msg, true)
+	respData, err := auth.request("getEntities", msg, true)
 	if err != nil {
 		return nil, 0, err
 	}
