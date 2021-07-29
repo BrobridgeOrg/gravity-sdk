@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+option go_package = "./;gravity_sdk_types_record";
+
 package gravity.sdk.types.record;
 
 enum Method {
@@ -18,6 +20,7 @@ enum DataType {
   FLOAT64 = 5;
   ARRAY = 6;
   MAP = 7;
+  NULL = 8;
 }
 
 message SendReply {

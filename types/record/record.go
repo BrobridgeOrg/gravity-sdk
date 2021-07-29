@@ -45,6 +45,8 @@ func GetValue(value *Value) interface{} {
 		return int8(value.Value[0]) & 1
 	case DataType_STRING:
 		return string(value.Value)
+	case DataType_NULL:
+		return nil
 	}
 
 	// binary
@@ -95,7 +97,9 @@ func GetDefinition(record *Record) (*RecordDef, error) {
 func GetValueFromInterface(data interface{}) (*Value, error) {
 
 	if data == nil {
-		return nil, errors.New("data cannot be nil")
+		return &Value{
+			Type: DataType_NULL,
+		}, nil
 	}
 
 	switch data.(type) {

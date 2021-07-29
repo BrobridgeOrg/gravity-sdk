@@ -12,6 +12,7 @@ require (
 	github.com/nats-io/nats.go v1.10.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.8.1
+	google.golang.org/protobuf v1.26.0
 )
 
 //replace github.com/BrobridgeOrg/gravity-api => ../gravity-api
