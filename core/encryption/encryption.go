@@ -20,6 +20,10 @@ func NewEncryption() *Encryption {
 	return &Encryption{}
 }
 
+func (encryption *Encryption) GetKey() []byte {
+	return encryption.key
+}
+
 func (encryption *Encryption) SetKey(key string) {
 	if len(key) == 0 {
 		encryption.key = []byte("")

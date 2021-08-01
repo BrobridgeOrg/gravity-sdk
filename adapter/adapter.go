@@ -63,10 +63,9 @@ func (ac *AdapterConnector) register(component string, adapterID string, name st
 		"id": adapterID,
 	}).Info("Registering adapter")
 
-	conn := ac.client.GetConnection()
-
-	// Attempt to connect to endpoint
-	endpoint, err := ac.client.ConnectToEndpoint(ac.options.Endpoint, ac.options.Domain, nil)
+	// Prepare token
+	key := ac.options.Key
+	token, err := key.Encryption().PrepareToken()
 	if err != nil {
 		return err
 	}
@@ -75,16 +74,18 @@ func (ac *AdapterConnector) register(component string, adapterID string, name st
 		AdapterID: adapterID,
 		Name:      name,
 		Component: component,
+		AppID:     key.GetAppID(),
+		Token:     token,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("adapter_manager.register"), msg, time.Second*10)
+	respData, err := ac.request("adapter_manager.register", msg, true)
 	if err != nil {
 		return err
 	}
 
 	var reply adapter_manager_pb.RegisterAdapterReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return err
 	}
@@ -179,24 +180,16 @@ func (ac *AdapterConnector) BatchPublish(requests []*Request) (bool, int32, erro
 		})
 	}
 
-	// Getting endpoint from client object
-	endpoint, err := ac.GetEndpoint()
-	if err != nil {
-		return false, 0, err
-	}
-
-	connection := endpoint.GetConnection()
-
 	// Sned
 	reqMsg, _ := proto.Marshal(request)
-	resp, err := connection.Request(endpoint.Channel("dsa.batch"), reqMsg, time.Second*30)
+	respData, err := ac.request("dsa.batch", reqMsg, true)
 	if err != nil {
 		return false, 0, err
 	}
 
 	// Parse reply message
 	var reply dsa.BatchPublishReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return false, 0, err
 	}

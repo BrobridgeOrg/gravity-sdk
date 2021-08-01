@@ -1,6 +1,7 @@
 package authenticator
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -26,15 +27,22 @@ func (auth *Authenticator) request(method string, data []byte, encrypted bool) (
 
 	conn := endpoint.GetConnection()
 
+	// Preparing payload
+	payload := packet_pb.Payload{
+		Data: data,
+	}
+
+	payloadData, _ := proto.Marshal(&payload)
+
 	// Preparing packet
 	packet := packet_pb.Packet{
 		AppID:   auth.options.AppID,
-		Payload: data,
+		Payload: payloadData,
 	}
 
 	// Encrypt
 	if encrypted {
-		payload, err := auth.encryption.Encrypt(data)
+		payload, err := auth.encryption.Encrypt(packet.Payload)
 		if err != nil {
 			return []byte(""), err
 		}
@@ -50,15 +58,22 @@ func (auth *Authenticator) request(method string, data []byte, encrypted bool) (
 		return []byte(""), err
 	}
 
+	// Parsing data
+	err = proto.Unmarshal(resp.Data, &packet)
+	if err != nil {
+		log.Error(err)
+		return []byte(""), errors.New("Forbidden")
+	}
+
 	// Decrypt
 	if encrypted {
-		data, err = auth.encryption.Decrypt(resp.Data)
+		data, err = auth.encryption.Decrypt(packet.Payload)
 		if err != nil {
-			return []byte(""), err
+			return []byte(""), errors.New("Forbidden")
 		}
 
 		return data, nil
 	}
 
-	return resp.Data, nil
+	return packet.Payload, nil
 }

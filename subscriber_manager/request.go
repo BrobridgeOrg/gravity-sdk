@@ -1,6 +1,7 @@
 package subscriber_manager
 
 import (
+	"errors"
 	"time"
 
 	packet_pb "github.com/BrobridgeOrg/gravity-api/packet"
@@ -18,15 +19,22 @@ func (sm *SubscriberManager) request(method string, data []byte, encrypted bool)
 	conn := endpoint.GetConnection()
 	key := sm.options.Key
 
+	// Preparing payload
+	payload := packet_pb.Payload{
+		Data: data,
+	}
+
+	payloadData, _ := proto.Marshal(&payload)
+
 	// Preparing packet
 	packet := packet_pb.Packet{
 		AppID:   key.GetAppID(),
-		Payload: data,
+		Payload: payloadData,
 	}
 
 	// Encrypt
 	if encrypted {
-		payload, err := key.Encryption().Encrypt(data)
+		payload, err := key.Encryption().Encrypt(packet.Payload)
 		if err != nil {
 			return []byte(""), err
 		}
@@ -42,15 +50,22 @@ func (sm *SubscriberManager) request(method string, data []byte, encrypted bool)
 		return []byte(""), err
 	}
 
+	// Parsing data
+	err = proto.Unmarshal(resp.Data, &packet)
+	if err != nil {
+		log.Error(err)
+		return []byte(""), errors.New("Forbidden")
+	}
+
 	// Decrypt
 	if encrypted {
-		data, err = key.Encryption().Decrypt(resp.Data)
+		data, err = key.Encryption().Decrypt(packet.Payload)
 		if err != nil {
-			return []byte(""), err
+			return []byte(""), errors.New("Forbidden")
 		}
 
 		return data, nil
 	}
 
-	return resp.Data, nil
+	return packet.Payload, nil
 }

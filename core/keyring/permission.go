@@ -27,6 +27,10 @@ func (p *Permission) AddPermissions(permissions []string) {
 	p.permissions = append(p.permissions, permissions...)
 }
 
+func (p *Permission) GetPermissions() []string {
+	return p.permissions
+}
+
 func (p *Permission) Check(rule string) bool {
 
 	p.mutex.RLock()

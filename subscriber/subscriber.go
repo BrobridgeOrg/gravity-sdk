@@ -87,7 +87,7 @@ func (sub *Subscriber) register(subscriberType subscriber_manager_pb.SubscriberT
 	}
 	msg, _ := proto.Marshal(&request)
 
-	respData, err := sub.request("subscriber_manager.registerSubscriber", msg, false)
+	respData, err := sub.request("subscriber_manager.registerSubscriber", msg, true)
 	if err != nil {
 		return err
 	}

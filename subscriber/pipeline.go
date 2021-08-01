@@ -64,14 +64,14 @@ func (pipeline *Pipeline) getStateFromServer() (*pipeline_pb.GetStateReply, erro
 	var reply pipeline_pb.GetStateReply
 	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("Forbidden")
 	}
 
 	if !reply.Success {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
 		}).Error(reply.Reason)
-		return nil, err
+		return nil, errors.New(reply.Reason)
 	}
 
 	log.WithFields(logrus.Fields{
