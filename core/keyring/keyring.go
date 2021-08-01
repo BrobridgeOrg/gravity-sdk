@@ -16,7 +16,7 @@ type KeyInfo struct {
 func NewKey(appID string, key string) *KeyInfo {
 
 	en := encryption.NewEncryption()
-	en.SetKey(key)
+	en.SetAccessKey(key)
 
 	return &KeyInfo{
 		appID:      appID,
@@ -83,4 +83,8 @@ func (keyring *Keyring) Unref(appID string) {
 
 func (keyring *Keyring) Delete(appID string) {
 	keyring.Delete(appID)
+}
+
+func (keyring *Keyring) GetKeys() *sync.Map {
+	return &keyring.apps
 }

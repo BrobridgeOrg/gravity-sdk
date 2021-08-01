@@ -24,7 +24,18 @@ func (encryption *Encryption) GetKey() []byte {
 	return encryption.key
 }
 
-func (encryption *Encryption) SetKey(key string) {
+func (encryption *Encryption) SetKey(key []byte) {
+	if len(key) == 0 {
+		encryption.key = []byte("")
+		encryption.enabled = false
+		return
+	}
+
+	encryption.key = key
+	encryption.enabled = true
+}
+
+func (encryption *Encryption) SetAccessKey(key string) {
 	if len(key) == 0 {
 		encryption.key = []byte("")
 		encryption.enabled = false

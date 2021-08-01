@@ -36,13 +36,13 @@ func (auth *Authenticator) request(method string, data []byte, encrypted bool) (
 
 	// Preparing packet
 	packet := packet_pb.Packet{
-		AppID:   auth.options.AppID,
+		AppID:   auth.options.Key.GetAppID(),
 		Payload: payloadData,
 	}
 
 	// Encrypt
 	if encrypted {
-		payload, err := auth.encryption.Encrypt(packet.Payload)
+		payload, err := auth.options.Key.Encryption().Encrypt(packet.Payload)
 		if err != nil {
 			return []byte(""), err
 		}
@@ -67,7 +67,7 @@ func (auth *Authenticator) request(method string, data []byte, encrypted bool) (
 
 	// Decrypt
 	if encrypted {
-		data, err = auth.encryption.Decrypt(packet.Payload)
+		data, err = auth.options.Key.Encryption().Decrypt(packet.Payload)
 		if err != nil {
 			return []byte(""), errors.New("Forbidden")
 		}

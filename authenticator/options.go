@@ -1,24 +1,26 @@
 package authenticator
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/BrobridgeOrg/gravity-sdk/core/keyring"
+)
 
 type Options struct {
-	Endpoint  string
-	Domain    string
-	Verbose   bool
-	Channel   string
-	AppID     string
-	AccessKey string
+	Endpoint string
+	Domain   string
+	Verbose  bool
+	Channel  string
+	Key      *keyring.KeyInfo
 }
 
 func NewOptions() *Options {
 	return &Options{
-		Endpoint:  "default",
-		Domain:    "gravity",
-		Verbose:   false,
-		Channel:   "",
-		AppID:     "gravity",
-		AccessKey: "",
+		Endpoint: "default",
+		Domain:   "gravity",
+		Verbose:  false,
+		Channel:  "",
+		Key:      keyring.NewKey("gravity", ""),
 	}
 }
 

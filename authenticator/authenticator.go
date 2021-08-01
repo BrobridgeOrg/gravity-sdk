@@ -6,7 +6,6 @@ import (
 
 	authenticator_pb "github.com/BrobridgeOrg/gravity-api/service/auth"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
-	"github.com/BrobridgeOrg/gravity-sdk/core/encryption"
 	"github.com/golang/protobuf/proto"
 	"github.com/sirupsen/logrus"
 )
@@ -14,9 +13,8 @@ import (
 var log = logrus.New()
 
 type Authenticator struct {
-	client     *core.Client
-	options    *Options
-	encryption *encryption.Encryption
+	client  *core.Client
+	options *Options
 }
 
 func NewAuthenticator(options *Options) *Authenticator {
@@ -28,13 +26,8 @@ func NewAuthenticator(options *Options) *Authenticator {
 		log.SetLevel(logrus.InfoLevel)
 	}
 
-	// Initializing encryption
-	en := encryption.NewEncryption()
-	en.SetKey(options.AccessKey)
-
 	return &Authenticator{
-		options:    options,
-		encryption: en,
+		options: options,
 	}
 }
 
