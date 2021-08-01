@@ -3,9 +3,8 @@ module github.com/BrobridgeOrg/gravity-sdk
 go 1.15
 
 require (
-	github.com/BrobridgeOrg/broc v0.0.2 // indirect
 	github.com/BrobridgeOrg/broton v0.0.7
-	github.com/BrobridgeOrg/gravity-api v0.2.19
+	github.com/BrobridgeOrg/gravity-api v0.2.20
 	github.com/cfsghost/buffered-input v0.0.1
 	github.com/cfsghost/parallel-chunked-flow v0.0.6
 	github.com/golang/protobuf v1.5.2
@@ -16,7 +15,7 @@ require (
 	google.golang.org/protobuf v1.26.0
 )
 
-replace github.com/BrobridgeOrg/gravity-api => ../gravity-api
+//replace github.com/BrobridgeOrg/gravity-api => ../gravity-api
 
 //replace github.com/BrobridgeOrg/gravity-sdk => ../gravity-sdk
 
