@@ -10,6 +10,7 @@ type KeyInfo struct {
 	appID      string
 	encryption *encryption.Encryption
 	permission *Permission
+	collection *Collection
 	ref        int
 }
 
@@ -22,6 +23,7 @@ func NewKey(appID string, key string) *KeyInfo {
 		appID:      appID,
 		encryption: en,
 		permission: NewPermission(),
+		collection: NewCollection(),
 		ref:        0,
 	}
 }
@@ -36,6 +38,10 @@ func (info *KeyInfo) Encryption() *encryption.Encryption {
 
 func (info *KeyInfo) Permission() *Permission {
 	return info.permission
+}
+
+func (info *KeyInfo) Collection() *Collection {
+	return info.collection
 }
 
 type Keyring struct {
