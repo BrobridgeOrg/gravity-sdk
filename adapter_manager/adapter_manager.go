@@ -155,7 +155,6 @@ func (am *AdapterManager) GetAdapters() ([]*Adapter, error) {
 			ID:        sub.AdapterID,
 			Name:      sub.Name,
 			Component: sub.Component,
-			Type:      sub.Type,
 		})
 	}
 
