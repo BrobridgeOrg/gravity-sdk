@@ -3,7 +3,6 @@ package adapter_manager
 import (
 	"errors"
 	"os"
-	"time"
 
 	adapter_manager_pb "github.com/BrobridgeOrg/gravity-api/service/adapter_manager"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
@@ -53,63 +52,20 @@ func (am *AdapterManager) GetEndpoint() (*core.Endpoint, error) {
 	return am.client.ConnectToEndpoint(am.options.Endpoint, am.options.Domain, nil)
 }
 
-func (am *AdapterManager) Register(component string, adapterID string, name string) error {
-
-	// Getting endpoint from client object
-	endpoint, err := am.GetEndpoint()
-	if err != nil {
-		return err
-	}
-
-	conn := endpoint.GetConnection()
-
-	request := adapter_manager_pb.RegisterAdapterRequest{
-		AdapterID: adapterID,
-		Name:      name,
-		Component: component,
-	}
-	msg, _ := proto.Marshal(&request)
-
-	resp, err := conn.Request(endpoint.Channel("adapter_manager.register"), msg, time.Second*10)
-	if err != nil {
-		return err
-	}
-
-	var reply adapter_manager_pb.RegisterAdapterReply
-	err = proto.Unmarshal(resp.Data, &reply)
-	if err != nil {
-		return err
-	}
-
-	if !reply.Success {
-		return errors.New(reply.Reason)
-	}
-
-	return nil
-}
-
 func (am *AdapterManager) Unregister(adapterID string) error {
-
-	// Getting endpoint from client object
-	endpoint, err := am.GetEndpoint()
-	if err != nil {
-		return err
-	}
-
-	conn := endpoint.GetConnection()
 
 	request := adapter_manager_pb.UnregisterAdapterRequest{
 		AdapterID: adapterID,
 	}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("adapter_manager.unregister"), msg, time.Second*10)
+	respData, err := am.request("adapter_manager.unregister", msg, true)
 	if err != nil {
 		return err
 	}
 
 	var reply adapter_manager_pb.UnregisterAdapterReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return err
 	}
@@ -123,24 +79,16 @@ func (am *AdapterManager) Unregister(adapterID string) error {
 
 func (am *AdapterManager) GetAdapters() ([]*Adapter, error) {
 
-	// Getting endpoint from client object
-	endpoint, err := am.GetEndpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	conn := endpoint.GetConnection()
-
 	request := adapter_manager_pb.GetAdaptersRequest{}
 	msg, _ := proto.Marshal(&request)
 
-	resp, err := conn.Request(endpoint.Channel("adapter_manager.getAdapters"), msg, time.Second*10)
+	respData, err := am.request("adapter_manager.getAdapters", msg, true)
 	if err != nil {
 		return nil, err
 	}
 
 	var reply adapter_manager_pb.GetAdaptersReply
-	err = proto.Unmarshal(resp.Data, &reply)
+	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
 		return nil, err
 	}
@@ -149,13 +97,13 @@ func (am *AdapterManager) GetAdapters() ([]*Adapter, error) {
 		return nil, errors.New(reply.Reason)
 	}
 
-	adapters := make([]*Adapter, 0, len(reply.Adapters))
-	for _, sub := range reply.Adapters {
-		adapters = append(adapters, &Adapter{
+	adapters := make([]*Adapter, len(reply.Adapters))
+	for i, sub := range reply.Adapters {
+		adapters[i] = &Adapter{
 			ID:        sub.AdapterID,
 			Name:      sub.Name,
 			Component: sub.Component,
-		})
+		}
 	}
 
 	return adapters, nil
