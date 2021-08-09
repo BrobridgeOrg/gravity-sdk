@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strconv"
 	"unsafe"
+
+	"github.com/golang/protobuf/ptypes"
 )
 
 var (
@@ -47,6 +49,9 @@ func GetValue(value *Value) interface{} {
 		return string(value.Value)
 	case DataType_NULL:
 		return nil
+	case DataType_TIME:
+		ts, _ := ptypes.Timestamp(value.Timestamp)
+		return ts
 	}
 
 	// binary

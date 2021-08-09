@@ -4,6 +4,8 @@ option go_package = "./;gravity_sdk_types_record";
 
 package gravity.sdk.types.record;
 
+import "google/protobuf/timestamp.proto";
+
 enum Method {
   INSERT = 0;
   UPDATE = 1;
@@ -21,6 +23,7 @@ enum DataType {
   ARRAY = 6;
   MAP = 7;
   NULL = 8;
+  TIME = 9;
 }
 
 message SendReply {
@@ -46,6 +49,7 @@ message Value {
   bytes value = 2;
   MapValue map = 3;
   ArrayValue array = 4;
+  google.protobuf.Timestamp timestamp = 5;
 }
 
 message MapValue {
