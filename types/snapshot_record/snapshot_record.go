@@ -1,32 +1,29 @@
 package gravity_sdk_types_snapshot_record
 
 import (
-	"bytes"
-	"encoding/gob"
+	"github.com/golang/protobuf/proto"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
-type SnapshotRecordMeta struct {
-}
+func (sr *SnapshotRecord) SetPayload(mapData map[string]interface{}) error {
+	payload, err := structpb.NewStruct(mapData)
+	if err != nil {
+		return err
+	}
 
-type SnapshotRecord struct {
-	Meta    SnapshotRecordMeta     `json:"meta"`
-	Payload map[string]interface{} `json:"payload"`
+	sr.Payload = payload
+
+	return nil
 }
 
 func (sr *SnapshotRecord) ToBytes() ([]byte, error) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(sr)
-	if err != nil {
-		return nil, err
-	}
+	return proto.Marshal(sr)
+}
 
-	return buf.Bytes(), nil
+func Marshal(record *SnapshotRecord) ([]byte, error) {
+	return proto.Marshal(record)
 }
 
 func Unmarshal(data []byte, record *SnapshotRecord) error {
-	var buf bytes.Buffer
-	buf.Write(data)
-	dec := gob.NewDecoder(&buf)
-	return dec.Decode(record)
+	return proto.Unmarshal(data, record)
 }
