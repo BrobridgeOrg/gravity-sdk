@@ -212,19 +212,25 @@ func (pipeline *Pipeline) fetch() error {
 
 	// No more event so pipeline should be suspended
 	if reply.Count == 0 {
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+			"lastSeq":  reply.LastSeq,
+			"curSeq":   pipeline.lastSeq,
+		}).Info("No more data")
 
 		// Trying to suspend to prevent infinite loop
 		pipeline.isSuspended = true
 		return nil
 	}
 
-	pipeline.UpdateLastSequence(reply.LastSeq)
-
 	log.WithFields(logrus.Fields{
 		"pipeline": pipeline.id,
+		"origSeq":  pipeline.lastSeq,
 		"lastSeq":  reply.LastSeq,
 		"count":    reply.Count,
 	}).Info("-> Fetching event chunk")
+
+	pipeline.UpdateLastSequence(reply.LastSeq)
 
 	return nil
 }

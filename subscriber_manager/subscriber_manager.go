@@ -75,10 +75,10 @@ func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 		return nil, errors.New(reply.Reason)
 	}
 
-	subscribers := make([]*Subscriber, 0, len(reply.Subscribers))
-	for _, sub := range reply.Subscribers {
+	subscribers := make([]*Subscriber, len(reply.Subscribers))
+	for i, sub := range reply.Subscribers {
 		lastCheck, _ := ptypes.Timestamp(sub.LastCheck)
-		subscribers = append(subscribers, &Subscriber{
+		subscribers[i] = &Subscriber{
 			ID:          sub.SubscriberID,
 			Name:        sub.Name,
 			Component:   sub.Component,
@@ -87,7 +87,8 @@ func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 			AppID:       sub.AppID,
 			AccessKey:   sub.AccessKey,
 			Permissions: sub.Permissions,
-		})
+			Collections: sub.Collections,
+		}
 	}
 
 	return subscribers, nil

@@ -15,4 +15,5 @@ type Subscriber struct {
 	AppID       string
 	AccessKey   string
 	Permissions []string
+	Collections []string
 }

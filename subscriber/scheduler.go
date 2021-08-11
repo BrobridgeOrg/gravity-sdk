@@ -2,6 +2,7 @@ package subscriber
 
 import (
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -54,6 +55,11 @@ func (scheduler *Scheduler) startWorker(workerID int) {
 				}).Error(err)
 
 				taskState.SetState(SchedulerTaskState_Idle)
+
+				<-time.After(time.Second)
+
+				scheduler.idle <- pipeline
+				continue
 			}
 
 			if pipeline.isSuspended {
