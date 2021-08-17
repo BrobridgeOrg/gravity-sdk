@@ -163,12 +163,12 @@ func (pipeline *Pipeline) performInitialLoad() error {
 		pipeline.snapshot.Close()
 
 		pipeline.Ready()
-		pipeline.Idle()
+		//		pipeline.Idle()
 
 		return nil
 	}
 
-	pipeline.Idle()
+	//	pipeline.Idle()
 
 	return nil
 }
