@@ -6,18 +6,34 @@ import (
 	"sync"
 
 	pipeline_pb "github.com/BrobridgeOrg/gravity-api/service/pipeline"
-	synchronizer_pb "github.com/BrobridgeOrg/gravity-api/service/synchronizer"
 	"github.com/golang/protobuf/proto"
 	"github.com/sirupsen/logrus"
 )
+
+type PipelineStatus int32
+
+const (
+	PIPELINE_STATUS_OPEN PipelineStatus = iota
+	PIPELINE_STATUS_HALF_OPEN
+	PIPELINE_STATUS_CLOSE
+)
+
+var PipelineStatusNames = map[PipelineStatus]string{
+	0: "Open",
+	1: "Half Open",
+	2: "Close",
+}
 
 type Pipeline struct {
 	subscriber  *Subscriber
 	snapshot    *Snapshot
 	id          uint64
 	lastSeq     uint64
+	updatedSeq  uint64
 	isReady     bool
 	isSuspended bool
+	status      PipelineStatus
+	failure     int
 	mutex       sync.Mutex
 }
 
@@ -26,22 +42,82 @@ func NewPipeline(subscriber *Subscriber, id uint64, lastSeq uint64) *Pipeline {
 		subscriber: subscriber,
 		id:         id,
 		lastSeq:    lastSeq,
+		updatedSeq: lastSeq,
 		isReady:    false,
+		status:     PIPELINE_STATUS_OPEN,
 	}
+}
+
+func (pipeline *Pipeline) Initialize() error {
+
+	// Initial load is disabled
+	if !pipeline.subscriber.options.InitialLoad.Enabled {
+		pipeline.isReady = true
+		return nil
+	}
+
+	// Getting pipeline states
+	state, err := pipeline.getStateFromServer()
+	if err != nil {
+		return err
+	}
+
+	// check states for snapshot
+	if pipeline.lastSeq == 0 || pipeline.lastSeq+pipeline.subscriber.options.InitialLoad.OmittedCount < state.LastSeq {
+
+		//TODO: It should be improved to compare number of records with pipeline lastS else 		//TODO: Truncate
+
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Info("Preparing snapshot")
+
+		// Initializing snapshot
+		snapshot := NewSnapshot(pipeline)
+		pipeline.snapshot = snapshot
+
+		// Using snapshot last sequence to initialize pipeline
+		pipeline.lastSeq = state.LastSeq
+
+		// Create snapshot
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Info("Creating snapshot")
+
+		// Create a new snapshot
+		err := pipeline.snapshot.Create()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	// Ready
+	pipeline.isReady = true
+
+	return nil
 }
 
 func (pipeline *Pipeline) UpdateLastSequence(sequence uint64) {
 	pipeline.lastSeq = sequence
 }
 
-func (pipeline *Pipeline) SaveLastSequence() error {
+func (pipeline *Pipeline) SetUpdatedSequence(updatedSeq uint64) error {
+
+	if pipeline.updatedSeq >= updatedSeq {
+		return nil
+	}
+
+	pipeline.updatedSeq = updatedSeq
+
 	if pipeline.subscriber.options.StateStore == nil {
 		return nil
 	}
 
 	// Write to store
 	pipelineState, _ := pipeline.subscriber.options.StateStore.GetPipelineState(pipeline.id)
-	return pipelineState.UpdateLastSequence(pipeline.lastSeq)
+
+	return pipelineState.UpdateLastSequence(updatedSeq)
 }
 
 func (pipeline *Pipeline) getStateFromServer() (*pipeline_pb.GetStateReply, error) {
@@ -83,102 +159,13 @@ func (pipeline *Pipeline) getStateFromServer() (*pipeline_pb.GetStateReply, erro
 
 }
 
-func (pipeline *Pipeline) initialize() error {
-
-	// Initial load is disabled
-	if !pipeline.subscriber.options.InitialLoad.Enabled {
-		pipeline.Ready()
-		return nil
-	}
-
-	// Getting pipeline states
-	state, err := pipeline.getStateFromServer()
-	if err != nil {
-		return err
-	}
-
-	// check states
-	if pipeline.lastSeq == 0 || pipeline.lastSeq+pipeline.subscriber.options.InitialLoad.OmittedCount < state.LastSeq {
-
-		//TODO: It should be improved to compare number of records with pipeline lastSeq
-		//TODO: Truncate
-
-		log.WithFields(logrus.Fields{
-			"pipeline": pipeline.id,
-		}).Info("Preparing snapshot")
-
-		// Initializing snapshot
-		snapshot := NewSnapshot(pipeline)
-		pipeline.snapshot = snapshot
-
-		// Using snapshot last sequence to initialize pipeline
-		pipeline.lastSeq = state.LastSeq
-
-		// Create snapshot
-		log.WithFields(logrus.Fields{
-			"pipeline": pipeline.id,
-		}).Info("Creating snapshot")
-
-		// Create a new snapshot
-		err := pipeline.snapshot.Create()
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	// Ready
-	pipeline.Ready()
-
-	return nil
-}
-
-func (pipeline *Pipeline) performInitialLoad() error {
-
-	// Pull data from snapshot
-	count, err := pipeline.snapshot.Pull()
-	if err != nil {
-		return err
-	}
-
-	// Need to wait
-	if count > 0 {
-		return nil
-	}
-
-	if pipeline.snapshot.isCompleted {
-
-		log.WithFields(logrus.Fields{
-			"pipeline": pipeline.id,
-		}).Info("Initial load was done")
-
-		// Write last sequence of snapshot to store
-		if err := pipeline.SaveLastSequence(); err != nil {
-			log.WithFields(logrus.Fields{
-				"pipeline": pipeline.id,
-			}).Error(err)
-		}
-
-		pipeline.snapshot.Close()
-
-		pipeline.Ready()
-		//		pipeline.Idle()
-
-		return nil
-	}
-
-	//	pipeline.Idle()
-
-	return nil
-}
-
-func (pipeline *Pipeline) fetch() error {
+//func (pipeline *Pipeline) pull() ([]*gravity_sdk_types_projection.Projection, error) {
+func (pipeline *Pipeline) pull() ([][]byte, error) {
 
 	// Fetch events from pipelines
-	channel := fmt.Sprintf("pipeline.%d.fetch", pipeline.id)
+	channel := fmt.Sprintf("pipeline.%d.pullEvents", pipeline.id)
 
-	request := synchronizer_pb.PipelineFetchRequest{
+	request := pipeline_pb.PullEventsRequest{
 		SubscriberID: pipeline.subscriber.id,
 		PipelineID:   pipeline.id,
 		StartAt:      pipeline.lastSeq,
@@ -194,79 +181,49 @@ func (pipeline *Pipeline) fetch() error {
 
 	respData, err := pipeline.subscriber.request(channel, msg, true)
 	if err != nil {
-		return fmt.Errorf("Failed to fetch: %v", err)
+		return nil, fmt.Errorf("Failed to fetch: %v", err)
 	}
 
-	var reply synchronizer_pb.PipelineFetchReply
+	var reply pipeline_pb.PullEventsReply
 	err = proto.Unmarshal(respData, &reply)
 	if err != nil {
-		return fmt.Errorf("Failed to fetch: %v", err)
+		return nil, fmt.Errorf("Failed to fetch: %v", err)
 	}
 
 	if !reply.Success {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
 		}).Errorf("Failed to fetch: %s", reply.Reason)
-		return errors.New(reply.Reason)
+		return nil, errors.New(reply.Reason)
 	}
 
 	// No more event so pipeline should be suspended
-	if reply.Count == 0 {
+	if len(reply.Events) == 0 {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
-			"lastSeq":  reply.LastSeq,
 			"curSeq":   pipeline.lastSeq,
-		}).Info("No more data")
-
-		// Trying to suspend to prevent infinite loop
-		pipeline.isSuspended = true
-		return nil
+		}).Info("No more event")
+		return nil, nil
 	}
 
 	log.WithFields(logrus.Fields{
 		"pipeline": pipeline.id,
 		"origSeq":  pipeline.lastSeq,
-		"lastSeq":  reply.LastSeq,
-		"count":    reply.Count,
+		"count":    len(reply.Events),
 	}).Info("-> Fetching event chunk")
 
-	pipeline.UpdateLastSequence(reply.LastSeq)
+	// Update last sequence
+	pipeline.lastSeq = reply.LastSeq
 
-	return nil
+	return reply.Events, nil
 }
 
-func (pipeline *Pipeline) Pull() error {
-
-	pipeline.mutex.Lock()
-	defer pipeline.mutex.Unlock()
-
-	if !pipeline.isReady {
-
-		// Initial load is disabled
-		if !pipeline.subscriber.options.InitialLoad.Enabled {
-			return nil
-		}
-
-		// fetching data for initial load
-		err := pipeline.performInitialLoad()
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	return pipeline.fetch()
-}
-
-func (pipeline *Pipeline) Suspend() bool {
+func (pipeline *Pipeline) suspend() error {
 
 	log.WithFields(logrus.Fields{
 		"pipeline": pipeline.id,
 		"lastSeq":  pipeline.lastSeq,
 	}).Info("<- Suspending pipeline")
-
-	pipeline.isSuspended = false
 
 	// Fetch events from pipelines
 	channel := fmt.Sprintf("pipeline.%d.suspend", pipeline.id)
@@ -282,7 +239,7 @@ func (pipeline *Pipeline) Suspend() bool {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
 		}).Errorf("Failed to suspend: %v", err)
-		return false
+		return err
 	}
 
 	var reply pipeline_pb.SuspendReply
@@ -291,24 +248,22 @@ func (pipeline *Pipeline) Suspend() bool {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
 		}).Errorf("Failed to suspend: %v", err)
-		return false
+		return err
 	}
 
 	if len(reply.Reason) > 0 {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
 		}).Errorf("Failed to suspend: %s", reply.Reason)
-		return false
+		return errors.New(reply.Reason)
 	}
 
 	if !reply.Success {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
-		}).Warn("Disallow suscriber to suspend")
-		return false
+		}).Warn("Disallow subscriber to suspend")
+		return errors.New("Disallow subscriber to suspend")
 	}
-
-	pipeline.isSuspended = true
 
 	log.WithFields(logrus.Fields{
 		"pipeline": pipeline.id,
@@ -324,23 +279,192 @@ func (pipeline *Pipeline) Suspend() bool {
 		}).Errorf("Failed to flush state store: %s", err)
 	}
 
-	return true
+	return nil
 }
 
-func (pipeline *Pipeline) Idle() {
-	pipeline.subscriber.ReleasePipeline(pipeline.id)
-}
-
-func (pipeline *Pipeline) Ready() {
+func (pipeline *Pipeline) awake() error {
 
 	log.WithFields(logrus.Fields{
 		"pipeline": pipeline.id,
 		"lastSeq":  pipeline.lastSeq,
-	}).Info("Pipeline is ready")
+	}).Info("<- Suspending pipeline")
 
-	pipeline.isReady = true
+	// Fetch events from pipelines
+	channel := fmt.Sprintf("pipeline.%d.awake", pipeline.id)
+	request := pipeline_pb.AwakeRequest{
+		SubscriberID: pipeline.subscriber.id,
+	}
+
+	msg, _ := proto.Marshal(&request)
+
+	respData, err := pipeline.subscriber.request(channel, msg, true)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Errorf("Failed to awake: %v", err)
+		return err
+	}
+
+	var reply pipeline_pb.AwakeReply
+	err = proto.Unmarshal(respData, &reply)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Errorf("Failed to awake: %v", err)
+		return err
+	}
+
+	if len(reply.Reason) > 0 {
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Errorf("Failed to awake: %s", reply.Reason)
+		return errors.New(reply.Reason)
+	}
+
+	log.WithFields(logrus.Fields{
+		"pipeline": pipeline.id,
+	}).Warn("pipeline is back")
+
+	return nil
 }
 
-func (pipeline *Pipeline) Awake() {
-	pipeline.isSuspended = false
+func (pipeline *Pipeline) dispatchMessages(msgType MessageType, privData interface{}, records [][]byte) error {
+
+	for _, record := range records {
+
+		msg := messagePool.Get().(*Message)
+		msg.Subscription = pipeline.subscriber.subscription
+		msg.Pipeline = pipeline
+		msg.Type = msgType
+
+		switch msg.Type {
+		case MESSAGE_TYPE_SNAPSHOT:
+			msg.Payload = &SnapshotEvent{
+				PipelineID: pipeline.id,
+				Collection: privData.(string),
+				RawData:    record,
+			}
+			msg.Callback = nil
+
+		case MESSAGE_TYPE_EVENT:
+			msg.Payload = &DataEvent{
+				PipelineID: pipeline.id,
+				RawData:    record,
+			}
+
+			msg.Callback = func(msg *Message) {
+
+				// Update sequence number to state store
+				event := msg.Payload.(*DataEvent)
+				err := pipeline.SetUpdatedSequence(event.Sequence)
+				if err != nil {
+					log.Errorf("Failed to write sequence to state store: %v", err)
+				}
+			}
+		}
+
+		pipeline.subscriber.subscription.Push(msg)
+	}
+
+	return nil
+}
+
+func (pipeline *Pipeline) Awake() error {
+
+	pipeline.mutex.Lock()
+	defer pipeline.mutex.Unlock()
+
+	if !pipeline.isReady {
+
+		// Initial load is disabled
+		if !pipeline.subscriber.options.InitialLoad.Enabled {
+			return nil
+		}
+
+		// Pull data from snapshot
+		collection, records, err := pipeline.snapshot.Pull()
+		if err != nil {
+			pipeline.Fail()
+			return err
+		}
+
+		if records != nil {
+			// Dispatch
+			pipeline.dispatchMessages(MESSAGE_TYPE_SNAPSHOT, collection, records)
+			pipeline.Succeed()
+		}
+
+		if pipeline.snapshot.isCompleted {
+			pipeline.isReady = true
+			pipeline.SetUpdatedSequence(pipeline.lastSeq)
+			log.WithFields(logrus.Fields{
+				"pipeline": pipeline.id,
+				"lastSeq":  pipeline.lastSeq,
+			}).Warn("Initialized pipeline")
+			return nil
+		}
+
+		return nil
+	}
+
+	// Pull events
+	events, err := pipeline.pull()
+	if err != nil {
+		pipeline.Fail()
+		return err
+	}
+
+	if events == nil {
+		// No events
+		pipeline.Fail()
+		return nil
+	}
+
+	// Dispatch
+	pipeline.dispatchMessages(MESSAGE_TYPE_EVENT, nil, events)
+	pipeline.Succeed()
+
+	return nil
+}
+
+func (pipeline *Pipeline) Succeed() {
+
+	if pipeline.failure == 0 {
+		return
+	}
+
+	pipeline.failure--
+	if pipeline.failure == 0 {
+		pipeline.status = PIPELINE_STATUS_OPEN
+	} else if pipeline.status == PIPELINE_STATUS_CLOSE {
+		// Trying to re-open
+		pipeline.status = PIPELINE_STATUS_HALF_OPEN
+	}
+
+	log.WithFields(logrus.Fields{
+		"pipeline": pipeline.id,
+	}).Infof("Switch status to %s", PipelineStatusNames[pipeline.status])
+}
+
+func (pipeline *Pipeline) Fail() {
+
+	if pipeline.status == PIPELINE_STATUS_HALF_OPEN {
+		pipeline.failure = 3
+		pipeline.status = PIPELINE_STATUS_CLOSE
+
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Infof("Switch status to %s", PipelineStatusNames[pipeline.status])
+		return
+	}
+
+	pipeline.failure++
+	if pipeline.failure >= 3 {
+		pipeline.failure = 3
+		pipeline.status = PIPELINE_STATUS_CLOSE
+
+		log.WithFields(logrus.Fields{
+			"pipeline": pipeline.id,
+		}).Infof("Switch status to %s", PipelineStatusNames[pipeline.status])
+	}
 }

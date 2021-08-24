@@ -32,7 +32,8 @@ type Subscriber struct {
 	pipelines     map[uint64]*Pipeline
 	collectionMap map[string][]string
 	subscription  *Subscription
-	scheduler     *Scheduler
+	eventHandler  *EventHandler
+	runner        *Runner
 }
 
 func NewSubscriber(options *Options) *Subscriber {
@@ -48,10 +49,11 @@ func NewSubscriber(options *Options) *Subscriber {
 		options:       options,
 		pipelines:     make(map[uint64]*Pipeline),
 		collectionMap: make(map[string][]string),
-		scheduler:     nil,
+		runner:        NewRunner(),
 	}
 
 	subscriber.subscription = NewSubscription(subscriber, options.BufferSize)
+	subscriber.eventHandler = NewEventHandler(subscriber)
 
 	return subscriber
 }
@@ -177,7 +179,18 @@ func (sub *Subscriber) Register(subscriberType subscriber_manager_pb.SubscriberT
 	// Subscribe to channel
 	conn := sub.client.GetConnection()
 	s, err := conn.Subscribe(endpoint.Channel(channel), func(m *nats.Msg) {
-		sub.subscription.buffer.Push(m.Data)
+		sub.eventHandler.ProcessEvent(m.Data)
+		/*
+			msg := messagePool.Get().(*Message)
+			msg.Subscription = pipeline.subscriber.subscription
+			msg.Pipeline = pipeline
+			//		msg.Type = EVENT_TYPE
+			msg.Data = m.Data
+			msg.Callback = record
+
+			sub.subscription.Push(m.Data)
+		*/
+		m.Ack()
 	})
 	if err != nil {
 		return err
@@ -191,15 +204,13 @@ func (sub *Subscriber) Register(subscriberType subscriber_manager_pb.SubscriberT
 
 func (sub *Subscriber) Start() {
 
-	// Initializing Scheduler
-	sub.scheduler = NewScheduler(len(sub.pipelines), sub.options.WorkerCount)
-	sub.scheduler.Initialize()
-
+	// Initializing runner
+	go sub.runner.Start()
 	for _, pipeline := range sub.pipelines {
 		log.WithFields(logrus.Fields{
 			"pipeline": pipeline.id,
-		}).Info("Added pipeline to scheduler")
-		sub.scheduler.AddPipeline(pipeline)
+		}).Info("Added pipeline to runner")
+		sub.runner.AddPipeline(pipeline)
 	}
 
 	go func() {
@@ -293,7 +304,7 @@ func (sub *Subscriber) AddPipeline(pipeline *Pipeline) error {
 	}
 
 	// Initializing pipeline
-	err := pipeline.initialize()
+	err := pipeline.Initialize()
 	if err != nil {
 		return err
 	}
@@ -346,6 +357,7 @@ func (sub *Subscriber) GetPipeline(pipelineID uint64) *Pipeline {
 	return nil
 }
 
+/*
 func (sub *Subscriber) AwakePipeline(pipelineID uint64) {
 
 	if sub.scheduler == nil {
@@ -354,11 +366,8 @@ func (sub *Subscriber) AwakePipeline(pipelineID uint64) {
 
 	sub.scheduler.Awake(pipelineID)
 }
-
+*/
 func (sub *Subscriber) ReleasePipeline(pipelineID uint64) {
 
-	if sub.scheduler == nil {
-		return
-	}
-	sub.scheduler.Idle(pipelineID)
+	//	sub.scheduler.Idle(pipelineID)
 }

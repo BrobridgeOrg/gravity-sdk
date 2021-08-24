@@ -3,7 +3,6 @@ package subscriber
 import (
 	"sync"
 
-	gravity_sdk_types_event "github.com/BrobridgeOrg/gravity-sdk/types/event"
 	gravity_sdk_types_projection "github.com/BrobridgeOrg/gravity-sdk/types/projection"
 )
 
@@ -19,28 +18,34 @@ var messagePool = sync.Pool{
 	},
 }
 
+type MessageType int32
+
+const (
+	MESSAGE_TYPE_EVENT MessageType = iota
+	MESSAGE_TYPE_SNAPSHOT
+)
+
 type Message struct {
 	Pipeline     *Pipeline
 	Subscription *Subscription
-	Event        *gravity_sdk_types_event.EventPayload
-	Snapshot     *gravity_sdk_types_event.SnapshotInfo
+	Type         MessageType
+	Payload      interface{}
+	Callback     func(*Message)
+}
+
+func NewMessage(pipeline *Pipeline, sub *Subscription, msgType MessageType, payload interface{}) *Message {
+	return &Message{
+		Pipeline:     pipeline,
+		Subscription: sub,
+		Type:         msgType,
+		Payload:      payload,
+	}
 }
 
 func (msg *Message) Ack() {
 
-	if msg.Event != nil {
-
-		// Update state store
-		if msg.Subscription.subscriber.options.StateStore != nil {
-			pipelineState, _ := msg.Subscription.subscriber.options.StateStore.GetPipelineState(msg.Event.PipelineID)
-			pipelineState.UpdateLastSequence(msg.Event.Sequence)
-		}
-	} else if msg.Snapshot != nil {
-		if msg.Snapshot.State == gravity_sdk_types_event.SnapshotInfo_STATE_NONE {
-
-			// update last key
-			msg.Pipeline.snapshot.UpdateLastKey(msg.Snapshot.Collection, msg.Snapshot.Key)
-		}
+	if msg.Callback != nil {
+		msg.Callback(msg)
 	}
 
 	messagePool.Put(msg)

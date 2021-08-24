@@ -1,6 +1,7 @@
 package subscriber
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -17,18 +18,19 @@ type CollectionSnapshot struct {
 }
 
 type Snapshot struct {
+	snapshotID  string
+	subscriber  *Subscriber
 	pipeline    *Pipeline
 	isReady     bool
 	isCompleted bool
-	id          string
 	collections sync.Map
 }
 
 func NewSnapshot(pipeline *Pipeline) *Snapshot {
 	snapshot := &Snapshot{
-		pipeline:    pipeline,
-		id:          uuid.NewV1().String(),
-		isCompleted: false,
+		snapshotID: uuid.NewV1().String(),
+		subscriber: pipeline.subscriber,
+		pipeline:   pipeline,
 	}
 
 	// Initializing collection snapshot states
@@ -62,22 +64,77 @@ func (snapshot *Snapshot) getLastPosition() *CollectionSnapshot {
 	return position
 }
 
-func (snapshot *Snapshot) UpdateLastKey(collection string, key []byte) error {
-	/*
-		value, ok := snapshot.collections.Load(collection)
-		if !ok {
-			return errors.New("No such collection")
-		}
+//func (snapshot *Snapshot) pull(collection string, lastKey []byte) ([]*gravity_sdk_types_snapshot_record.SnapshotRecord, error) {
+func (snapshot *Snapshot) pull(collection string, lastKey []byte) ([][]byte, error) {
 
-		collectionSnapshot := value.(*CollectionSnapshot)
+	v, ok := snapshot.collections.Load(collection)
+	if !ok {
+		return nil, fmt.Errorf("Not subscribed to collection: %s", collection)
+	}
 
-		if bytes.Compare(collectionSnapshot.lastKey, key) == 0 {
-			collectionSnapshot.isCompleted = true
-		}
-	*/
-	//	collectionSnapshot.lastKey = key
-	//TODO: Write to state store
-	return nil
+	collectionSnapshot := v.(*CollectionSnapshot)
+
+	// Fetch events from pipelines
+	channel := fmt.Sprintf("pipeline.%d.pullSnapshot", snapshot.pipeline.id)
+	request := pipeline_pb.PullSnapshotRequest{
+		SnapshotID:   snapshot.snapshotID,
+		SubscriberID: snapshot.subscriber.id,
+		Collection:   collection,
+		Key:          lastKey,
+		Offset:       1,
+		Count:        int64(snapshot.subscriber.options.ChunkSize),
+	}
+
+	if len(lastKey) == 0 {
+		request.Offset = 0
+	}
+
+	log.WithFields(logrus.Fields{
+		"pipeline":   snapshot.pipeline.id,
+		"snapshot":   snapshot.snapshotID,
+		"collection": request.Collection,
+	}).Info("Pulling from snapshot")
+
+	msg, _ := proto.Marshal(&request)
+
+	// Request
+	respData, err := snapshot.subscriber.request(channel, msg, true)
+	if err != nil {
+		return nil, err
+	}
+
+	var reply pipeline_pb.PullSnapshotReply
+	err = proto.Unmarshal(respData, &reply)
+	if err != nil {
+		return nil, err
+	}
+
+	if !reply.Success {
+		log.WithFields(logrus.Fields{
+			"pipeline": snapshot.pipeline.id,
+			"snapshot": snapshot.snapshotID,
+		}).Error(reply.Reason)
+		return nil, err
+	}
+
+	// No more records for this collection
+	if len(reply.Records) == 0 {
+		log.WithFields(logrus.Fields{
+			"pipeline":   snapshot.pipeline.id,
+			"snapshot":   snapshot.snapshotID,
+			"collection": request.Collection,
+		}).Info("Snapshot - No records")
+
+		collectionSnapshot.isCompleted = true
+
+		return nil, nil
+	}
+
+	// Update the last key
+	collectionSnapshot.lastKey = reply.LastKey
+
+	//	return records, nil
+	return reply.Records, nil
 }
 
 func (snapshot *Snapshot) Create() error {
@@ -85,12 +142,12 @@ func (snapshot *Snapshot) Create() error {
 	// Fetch events from pipelines
 	channel := fmt.Sprintf("pipeline.%d.createSnapshot", snapshot.pipeline.id)
 	request := pipeline_pb.CreateSnapshotRequest{
-		SnapshotID: snapshot.id,
+		SnapshotID: snapshot.snapshotID,
 	}
 
 	msg, _ := proto.Marshal(&request)
 
-	respData, err := snapshot.pipeline.subscriber.request(channel, msg, true)
+	respData, err := snapshot.subscriber.request(channel, msg, true)
 	if err != nil {
 		return err
 	}
@@ -115,18 +172,18 @@ func (snapshot *Snapshot) Close() error {
 
 	log.WithFields(logrus.Fields{
 		"pipeline": snapshot.pipeline.id,
-		"snapshot": snapshot.id,
+		"snapshot": snapshot.snapshotID,
 	}).Info("Closing snapshot")
 
 	// Fetch events from pipelines
 	channel := fmt.Sprintf("pipeline.%d.releaseSnapshot", snapshot.pipeline.id)
 	request := pipeline_pb.ReleaseSnapshotRequest{
-		SnapshotID: snapshot.id,
+		SnapshotID: snapshot.snapshotID,
 	}
 
 	msg, _ := proto.Marshal(&request)
 
-	respData, err := snapshot.pipeline.subscriber.request(channel, msg, true)
+	respData, err := snapshot.subscriber.request(channel, msg, true)
 	if err != nil {
 		return err
 	}
@@ -140,7 +197,7 @@ func (snapshot *Snapshot) Close() error {
 	if !reply.Success {
 		log.WithFields(logrus.Fields{
 			"pipeline": snapshot.pipeline.id,
-			"snapshot": snapshot.id,
+			"snapshot": snapshot.snapshotID,
 		}).Error(reply.Reason)
 		return err
 	}
@@ -148,77 +205,21 @@ func (snapshot *Snapshot) Close() error {
 	return nil
 }
 
-func (snapshot *Snapshot) Pull() (int64, error) {
+//func (snapshot *Snapshot) Pull() ([]*gravity_sdk_types_snapshot_record.SnapshotRecord, error) {
+func (snapshot *Snapshot) Pull() (string, [][]byte, error) {
 
+	if !snapshot.isReady {
+		return "", nil, errors.New("Snapshot is not ready yet")
+	}
+
+	// Pull snapshot chunk from one of collections
 	collectionSnapshot := snapshot.getLastPosition()
 	if collectionSnapshot == nil {
 		snapshot.isCompleted = true
-		return 0, nil
+		return "", nil, nil
 	}
 
-	// Fetch events from pipelines
-	channel := fmt.Sprintf("pipeline.%d.fetchSnapshot", snapshot.pipeline.id)
-	request := pipeline_pb.FetchSnapshotRequest{
-		SnapshotID:   snapshot.id,
-		SubscriberID: snapshot.pipeline.subscriber.id,
-		Collection:   collectionSnapshot.name,
-		Key:          collectionSnapshot.lastKey,
-		Offset:       1,
-		Count:        int64(snapshot.pipeline.subscriber.options.ChunkSize),
-	}
+	data, err := snapshot.pull(collectionSnapshot.name, collectionSnapshot.lastKey)
 
-	if len(collectionSnapshot.lastKey) == 0 {
-		request.Offset = 0
-	}
-
-	log.WithFields(logrus.Fields{
-		"pipeline":   snapshot.pipeline.id,
-		"snapshot":   snapshot.id,
-		"collection": request.Collection,
-	}).Info("Pulling from snapshot")
-
-	msg, _ := proto.Marshal(&request)
-
-	respData, err := snapshot.pipeline.subscriber.request(channel, msg, true)
-	if err != nil {
-		return 0, err
-	}
-
-	var reply pipeline_pb.FetchSnapshotReply
-	err = proto.Unmarshal(respData, &reply)
-	if err != nil {
-		return 0, err
-	}
-
-	if !reply.Success {
-		log.WithFields(logrus.Fields{
-			"pipeline": snapshot.pipeline.id,
-			"snapshot": snapshot.id,
-		}).Error(reply.Reason)
-		return 0, err
-	}
-
-	// No more records for this collection
-	if reply.Count == 0 {
-		collectionSnapshot.isCompleted = true
-
-		log.WithFields(logrus.Fields{
-			"pipeline":   snapshot.pipeline.id,
-			"snapshot":   snapshot.id,
-			"collection": request.Collection,
-		}).Info("No records")
-
-		return 0, nil
-	}
-
-	log.WithFields(logrus.Fields{
-		"pipeline":   snapshot.pipeline.id,
-		"snapshot":   snapshot.id,
-		"collection": request.Collection,
-		"count":      reply.Count,
-	}).Info("Receiving data from snapshot")
-
-	collectionSnapshot.lastKey = reply.LastKey
-
-	return reply.Count, nil
+	return collectionSnapshot.name, data, err
 }

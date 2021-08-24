@@ -1,9 +1,10 @@
 package subscriber
 
 import (
-	gravity_sdk_types_event "github.com/BrobridgeOrg/gravity-sdk/types/event"
+	gravity_sdk_types_pipeline_event "github.com/BrobridgeOrg/gravity-sdk/types/pipeline_event"
+	gravity_sdk_types_projection "github.com/BrobridgeOrg/gravity-sdk/types/projection"
+	gravity_sdk_types_snapshot_record "github.com/BrobridgeOrg/gravity-sdk/types/snapshot_record"
 	pcf "github.com/cfsghost/parallel-chunked-flow"
-	"github.com/golang/protobuf/proto"
 	nats "github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
@@ -35,68 +36,47 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 		ChunkCount: 128,
 		Handler: func(data interface{}, done func(interface{})) {
 
-			// Parsing event
-			var event gravity_sdk_types_event.Event
-			err := proto.Unmarshal(data.([]byte), &event)
-			if err != nil {
-				log.Error(err)
+			msg := data.(*Message)
 
-				// Ignore unknown event
-				return
-			}
+			switch msg.Type {
+			case MESSAGE_TYPE_SNAPSHOT:
 
-			// End of chunk
-			if event.Type == gravity_sdk_types_event.Event_TYPE_EVENT {
-				if event.EventPayload.State == gravity_sdk_types_event.EventPayload_STATE_CHUNK_END {
+				event := msg.Payload.(*SnapshotEvent)
 
-					log.WithFields(logrus.Fields{
-						"pipeline": event.EventPayload.PipelineID,
-						"sequence": event.EventPayload.Sequence,
-					}).Info("End of event chunk")
-
-					// Pipeline chunk has no more event
-					subscriber.ReleasePipeline(event.EventPayload.PipelineID)
+				// Parsing snapshot record
+				var snapshotRecord gravity_sdk_types_snapshot_record.SnapshotRecord
+				err := gravity_sdk_types_snapshot_record.Unmarshal(event.RawData, &snapshotRecord)
+				if err != nil {
+					log.Error(err)
 					return
 				}
-			} else if event.Type == gravity_sdk_types_event.Event_TYPE_SNAPSHOT {
-				if event.SnapshotInfo.State == gravity_sdk_types_event.SnapshotInfo_STATE_CHUNK_END {
 
+				event.Payload = &snapshotRecord
+			case MESSAGE_TYPE_EVENT:
+
+				event := msg.Payload.(*DataEvent)
+
+				// Parsing event
+				var pe gravity_sdk_types_pipeline_event.PipelineEvent
+				err := gravity_sdk_types_pipeline_event.Unmarshal(event.RawData, &pe)
+				if err != nil {
 					log.WithFields(logrus.Fields{
-						"pipeline": event.SnapshotInfo.PipelineID,
-					}).Info("End of snapshot chunck")
-
-					// Snapshot chunk has no more event
-					subscriber.ReleasePipeline(event.SnapshotInfo.PipelineID)
+						"pipeline": event.PipelineID,
+					}).Errorf("pipeline event - %v", err)
 					return
 				}
-			}
 
-			// Prepare message
-			msg := messagePool.Get().(*Message)
-			msg.Subscription = subscription
-			msg.Event = nil
-			msg.Snapshot = nil
+				var pj gravity_sdk_types_projection.Projection
+				err = gravity_sdk_types_projection.Unmarshal(pe.Payload, &pj)
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"pipeline": event.PipelineID,
+					}).Error(err)
+					return
+				}
 
-			// Types
-			switch event.Type {
-			case gravity_sdk_types_event.Event_TYPE_EVENT:
-				msg.Pipeline = subscriber.GetPipeline(event.EventPayload.PipelineID)
-				msg.Event = event.EventPayload
-			case gravity_sdk_types_event.Event_TYPE_SNAPSHOT:
-				msg.Pipeline = subscriber.GetPipeline(event.SnapshotInfo.PipelineID)
-				msg.Snapshot = event.SnapshotInfo
-			case gravity_sdk_types_event.Event_TYPE_SYSTEM:
-				msg.Pipeline = subscriber.GetPipeline(event.SystemInfo.AwakeMessage.PipelineID)
-
-				log.WithFields(logrus.Fields{
-					"pipeline": event.SystemInfo.AwakeMessage.PipelineID,
-					"seq":      event.SystemInfo.AwakeMessage.Sequence,
-				}).Info("Received awake event")
-
-				subscriber.AwakePipeline(event.SystemInfo.AwakeMessage.PipelineID)
-
-				messagePool.Put(msg)
-				return
+				event.Sequence = pe.Sequence
+				event.Payload = &pj
 			}
 
 			done(msg)
@@ -118,11 +98,16 @@ func (s *Subscription) start() {
 
 func (s *Subscription) handle(msg *Message) {
 
-	if msg.Event != nil {
+	switch msg.Type {
+	case MESSAGE_TYPE_EVENT:
 		s.eventHandler(msg)
-	} else if msg.Snapshot != nil {
+	case MESSAGE_TYPE_SNAPSHOT:
 		s.snapshotHandler(msg)
 	}
+}
+
+func (s *Subscription) Push(msg *Message) {
+	s.buffer.Push(msg)
 }
 
 func (s *Subscription) Unsubscribe() error {

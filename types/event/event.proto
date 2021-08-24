@@ -1,59 +1,13 @@
 syntax = "proto3";
 
+option go_package = "./;gravity_sdk_types_event";
+
 package gravity.sdk.types.event;
 
+import "google/protobuf/struct.proto";
+
 message Event {
-
-  enum Type {
-    TYPE_EVENT = 0;
-    TYPE_SNAPSHOT = 1;
-    TYPE_SYSTEM = 3;
-  }
-
-  Type type = 1;
-  EventPayload eventPayload = 2;
-  SnapshotInfo snapshotInfo = 3;
-  SystemMessage systemInfo = 4;
-}
-
-message EventPayload {
-
-  enum State {
-    STATE_NONE = 0;
-    STATE_CHUNK_END = 1;
-  }
-
-  uint64 pipelineID = 1;
-  uint64 sequence = 2;
-  bytes data = 3;
-  State state = 4;
-}
-
-message SnapshotInfo {
-
-  enum State {
-    STATE_NONE = 0;
-    STATE_CHUNK_END = 1;
-  }
-
-  uint64 pipelineID = 1;
-  string snapshotID = 2;
-  string collection = 3;
-  bytes key = 4;
-  bytes data = 5;
-  State state = 6;
-}
-
-message SystemMessage {
-  enum Type {
-    TYPE_WAKE = 0;
-  }
-
-  message AwakeMessage {
-    uint64 pipelineID = 1;
-    uint64 Sequence = 2;
-  }
-
-  Type type = 1; 
-  AwakeMessage awakeMessage = 2;
+  string eventName = 1;
+  google.protobuf.Struct meta = 2;
+  google.protobuf.Struct payload = 3;
 }
