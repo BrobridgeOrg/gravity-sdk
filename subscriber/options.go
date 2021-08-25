@@ -16,6 +16,7 @@ type Options struct {
 
 type InitialLoadOptions struct {
 	Enabled      bool
+	Mode         string
 	OmittedCount uint64
 }
 
@@ -32,6 +33,7 @@ func NewOptions() *Options {
 	}
 
 	options.InitialLoad.Enabled = false
+	options.InitialLoad.Mode = "snapshot"
 	options.InitialLoad.OmittedCount = 100000
 
 	return options

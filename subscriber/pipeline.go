@@ -62,34 +62,37 @@ func (pipeline *Pipeline) Initialize() error {
 		return err
 	}
 
-	// check states for snapshot
-	if pipeline.lastSeq == 0 || pipeline.lastSeq+pipeline.subscriber.options.InitialLoad.OmittedCount < state.LastSeq {
+	if pipeline.subscriber.options.InitialLoad.Mode == "snapshot" {
 
-		//TODO: It should be improved to compare number of records with pipeline lastS else 		//TODO: Truncate
+		// check states for snapshot
+		if pipeline.lastSeq == 0 || pipeline.lastSeq+pipeline.subscriber.options.InitialLoad.OmittedCount < state.LastSeq {
 
-		log.WithFields(logrus.Fields{
-			"pipeline": pipeline.id,
-		}).Info("Preparing snapshot")
+			//TODO: It should be improved to compare number of records with pipeline lastS else 		//TODO: Truncate
 
-		// Initializing snapshot
-		snapshot := NewSnapshot(pipeline)
-		pipeline.snapshot = snapshot
+			log.WithFields(logrus.Fields{
+				"pipeline": pipeline.id,
+			}).Info("Preparing snapshot")
 
-		// Using snapshot last sequence to initialize pipeline
-		pipeline.lastSeq = state.LastSeq
+			// Initializing snapshot
+			snapshot := NewSnapshot(pipeline)
+			pipeline.snapshot = snapshot
 
-		// Create snapshot
-		log.WithFields(logrus.Fields{
-			"pipeline": pipeline.id,
-		}).Info("Creating snapshot")
+			// Using snapshot last sequence to initialize pipeline
+			pipeline.lastSeq = state.LastSeq
 
-		// Create a new snapshot
-		err := pipeline.snapshot.Create()
-		if err != nil {
-			return err
+			// Create snapshot
+			log.WithFields(logrus.Fields{
+				"pipeline": pipeline.id,
+			}).Info("Creating snapshot")
+
+			// Create a new snapshot
+			err := pipeline.snapshot.Create()
+			if err != nil {
+				return err
+			}
+
+			return nil
 		}
-
-		return nil
 	}
 
 	// Ready
@@ -376,11 +379,6 @@ func (pipeline *Pipeline) Awake() error {
 
 	if !pipeline.isReady {
 
-		// Initial load is disabled
-		if !pipeline.subscriber.options.InitialLoad.Enabled {
-			return nil
-		}
-
 		// Pull data from snapshot
 		collection, records, err := pipeline.snapshot.Pull()
 		if err != nil {
@@ -397,6 +395,7 @@ func (pipeline *Pipeline) Awake() error {
 		if pipeline.snapshot.isCompleted {
 			pipeline.isReady = true
 			pipeline.SetUpdatedSequence(pipeline.lastSeq)
+			pipeline.snapshot.Close()
 			log.WithFields(logrus.Fields{
 				"pipeline": pipeline.id,
 				"lastSeq":  pipeline.lastSeq,
