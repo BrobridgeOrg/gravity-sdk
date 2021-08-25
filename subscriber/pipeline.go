@@ -50,16 +50,22 @@ func NewPipeline(subscriber *Subscriber, id uint64, lastSeq uint64) *Pipeline {
 
 func (pipeline *Pipeline) Initialize() error {
 
-	// Initial load is disabled
-	if !pipeline.subscriber.options.InitialLoad.Enabled {
-		pipeline.isReady = true
-		return nil
-	}
-
 	// Getting pipeline states
 	state, err := pipeline.getStateFromServer()
 	if err != nil {
 		return err
+	}
+
+	// Initial load is disabled
+	if !pipeline.subscriber.options.InitialLoad.Enabled {
+
+		if pipeline.lastSeq == 0 {
+			// Using last sequence to initialize pipeline
+			pipeline.SetUpdatedSequence(state.LastSeq)
+		}
+
+		pipeline.isReady = true
+		return nil
 	}
 
 	if pipeline.subscriber.options.InitialLoad.Mode == "snapshot" {
