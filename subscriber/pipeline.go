@@ -64,6 +64,7 @@ func (pipeline *Pipeline) Initialize() error {
 			pipeline.SetUpdatedSequence(state.LastSeq)
 		}
 
+		pipeline.lastSeq = state.LastSeq
 		pipeline.isReady = true
 		return nil
 	}
@@ -168,7 +169,6 @@ func (pipeline *Pipeline) getStateFromServer() (*pipeline_pb.GetStateReply, erro
 
 }
 
-//func (pipeline *Pipeline) pull() ([]*gravity_sdk_types_projection.Projection, error) {
 func (pipeline *Pipeline) pull() ([][]byte, error) {
 
 	// Fetch events from pipelines
