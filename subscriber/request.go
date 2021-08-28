@@ -6,6 +6,7 @@ import (
 
 	packet_pb "github.com/BrobridgeOrg/gravity-api/packet"
 	"github.com/golang/protobuf/proto"
+	"github.com/sirupsen/logrus"
 )
 
 func (sub *Subscriber) request(method string, data []byte, encrypted bool) ([]byte, error) {
@@ -53,7 +54,9 @@ func (sub *Subscriber) request(method string, data []byte, encrypted bool) ([]by
 	// Parsing data
 	err = proto.Unmarshal(resp.Data, &packet)
 	if err != nil {
-		log.Error(err)
+		log.WithFields(logrus.Fields{
+			"rpc": endpoint.Channel(method),
+		}).Error(err)
 		return []byte(""), errors.New("Forbidden")
 	}
 

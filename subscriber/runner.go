@@ -57,7 +57,8 @@ func (runner *Runner) awakeAllTasks() {
 }
 
 func (runner *Runner) AddPipeline(pipeline *Pipeline) {
-	runner.scheduler.AddTask(pipeline.id, pipeline, runner.execute)
+	task := runner.scheduler.AddTask(pipeline.id, pipeline, runner.execute)
+	task.SetState(scheduler.TASK_STATE_PREPARED)
 
 	// TODO: for testing
 	pipeline.suspend()
