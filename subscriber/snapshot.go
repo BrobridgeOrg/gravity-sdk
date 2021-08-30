@@ -11,6 +11,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var pullSnapshotPool = sync.Pool{
+	New: func() interface{} {
+		return &pipeline_pb.PullSnapshotReply{}
+	},
+}
+
 type CollectionSnapshot struct {
 	name        string
 	lastKey     []byte
@@ -103,8 +109,10 @@ func (snapshot *Snapshot) pull(collection string, lastKey []byte) ([][]byte, err
 		return nil, err
 	}
 
-	var reply pipeline_pb.PullSnapshotReply
-	err = proto.Unmarshal(respData, &reply)
+	reply := pullSnapshotPool.Get().(*pipeline_pb.PullSnapshotReply)
+	defer pullSnapshotPool.Put(reply)
+
+	err = proto.Unmarshal(respData, reply)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +141,6 @@ func (snapshot *Snapshot) pull(collection string, lastKey []byte) ([][]byte, err
 	// Update the last key
 	collectionSnapshot.lastKey = reply.LastKey
 
-	//	return records, nil
 	return reply.Records, nil
 }
 
