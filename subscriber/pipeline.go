@@ -337,6 +337,23 @@ func (pipeline *Pipeline) awake() error {
 	return nil
 }
 
+func (pipeline *Pipeline) snapshotEventCallback(msg *Message) {
+	event := msg.Payload.(*SnapshotEvent)
+	snapshotEventPool.Put(event)
+}
+
+func (pipeline *Pipeline) eventEventCallback(msg *Message) {
+
+	// Update sequence number to state store
+	event := msg.Payload.(*DataEvent)
+	err := pipeline.SetUpdatedSequence(event.Sequence)
+	if err != nil {
+		log.Errorf("Failed to write sequence to state store: %v", err)
+	}
+
+	dataEventPool.Put(event)
+}
+
 func (pipeline *Pipeline) dispatchMessages(msgType MessageType, privData interface{}, records [][]byte) error {
 
 	for _, record := range records {
@@ -348,28 +365,28 @@ func (pipeline *Pipeline) dispatchMessages(msgType MessageType, privData interfa
 
 		switch msg.Type {
 		case MESSAGE_TYPE_SNAPSHOT:
-			msg.Payload = &SnapshotEvent{
-				PipelineID: pipeline.id,
-				Collection: privData.(string),
-				RawData:    record,
-			}
-			msg.Callback = nil
+
+			// Prepare data event
+			snapshotEvent := snapshotEventPool.Get().(*SnapshotEvent)
+			snapshotEvent.PipelineID = pipeline.id
+			snapshotEvent.Collection = privData.(string)
+			snapshotEvent.RawData = record
+			snapshotEvent.Payload = nil
+
+			msg.Payload = snapshotEvent
+			msg.Callback = pipeline.snapshotEventCallback
 
 		case MESSAGE_TYPE_EVENT:
-			msg.Payload = &DataEvent{
-				PipelineID: pipeline.id,
-				RawData:    record,
-			}
 
-			msg.Callback = func(msg *Message) {
+			// Prepare data event
+			dataEvent := dataEventPool.Get().(*DataEvent)
+			dataEvent.PipelineID = pipeline.id
+			dataEvent.RawData = record
+			dataEvent.Sequence = 0
+			dataEvent.Payload = nil
 
-				// Update sequence number to state store
-				event := msg.Payload.(*DataEvent)
-				err := pipeline.SetUpdatedSequence(event.Sequence)
-				if err != nil {
-					log.Errorf("Failed to write sequence to state store: %v", err)
-				}
-			}
+			msg.Payload = dataEvent
+			msg.Callback = pipeline.eventEventCallback
 		}
 
 		pipeline.subscriber.subscription.Push(msg)

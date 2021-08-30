@@ -1,6 +1,8 @@
 package subscriber
 
 import (
+	"sync"
+
 	gravity_sdk_types_projection "github.com/BrobridgeOrg/gravity-sdk/types/projection"
 	gravity_sdk_types_snapshot_record "github.com/BrobridgeOrg/gravity-sdk/types/snapshot_record"
 )
@@ -17,4 +19,16 @@ type SnapshotEvent struct {
 	Collection string
 	RawData    []byte
 	Payload    *gravity_sdk_types_snapshot_record.SnapshotRecord
+}
+
+var dataEventPool = sync.Pool{
+	New: func() interface{} {
+		return &DataEvent{}
+	},
+}
+
+var snapshotEventPool = sync.Pool{
+	New: func() interface{} {
+		return &SnapshotEvent{}
+	},
 }
