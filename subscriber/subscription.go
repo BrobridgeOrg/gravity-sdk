@@ -1,6 +1,8 @@
 package subscriber
 
 import (
+	"sync"
+
 	gravity_sdk_types_pipeline_event "github.com/BrobridgeOrg/gravity-sdk/types/pipeline_event"
 	gravity_sdk_types_projection "github.com/BrobridgeOrg/gravity-sdk/types/projection"
 	gravity_sdk_types_snapshot_record "github.com/BrobridgeOrg/gravity-sdk/types/snapshot_record"
@@ -8,6 +10,24 @@ import (
 	nats "github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
+
+var pipelineEventPool = sync.Pool{
+	New: func() interface{} {
+		return &gravity_sdk_types_pipeline_event.PipelineEvent{}
+	},
+}
+
+var snapshotRecordPool = sync.Pool{
+	New: func() interface{} {
+		return &gravity_sdk_types_snapshot_record.SnapshotRecord{}
+	},
+}
+
+var projectionPool = sync.Pool{
+	New: func() interface{} {
+		return &gravity_sdk_types_projection.Projection{}
+	},
+}
 
 type Subscription struct {
 	subscriber      *Subscriber
@@ -22,10 +42,14 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 	subscription := &Subscription{
 		subscriber: subscriber,
 		eventHandler: func(msg *Message) {
+			event := msg.Payload.(*SnapshotEvent)
 			msg.Ack()
+			snapshotRecordPool.Put(event)
 		},
 		snapshotHandler: func(msg *Message) {
+			event := msg.Payload.(*DataEvent)
 			msg.Ack()
+			projectionPool.Put(event)
 		},
 	}
 
@@ -44,21 +68,21 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 				event := msg.Payload.(*SnapshotEvent)
 
 				// Parsing snapshot record
-				var snapshotRecord gravity_sdk_types_snapshot_record.SnapshotRecord
-				err := gravity_sdk_types_snapshot_record.Unmarshal(event.RawData, &snapshotRecord)
+				snapshotRecord := snapshotRecordPool.Get().(*gravity_sdk_types_snapshot_record.SnapshotRecord)
+				err := gravity_sdk_types_snapshot_record.Unmarshal(event.RawData, snapshotRecord)
 				if err != nil {
 					log.Error(err)
 					return
 				}
 
-				event.Payload = &snapshotRecord
+				event.Payload = snapshotRecord
 			case MESSAGE_TYPE_EVENT:
 
 				event := msg.Payload.(*DataEvent)
 
 				// Parsing event
-				var pe gravity_sdk_types_pipeline_event.PipelineEvent
-				err := gravity_sdk_types_pipeline_event.Unmarshal(event.RawData, &pe)
+				pe := pipelineEventPool.Get().(*gravity_sdk_types_pipeline_event.PipelineEvent)
+				err := gravity_sdk_types_pipeline_event.Unmarshal(event.RawData, pe)
 				if err != nil {
 					log.WithFields(logrus.Fields{
 						"pipeline": event.PipelineID,
@@ -66,8 +90,8 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 					return
 				}
 
-				var pj gravity_sdk_types_projection.Projection
-				err = gravity_sdk_types_projection.Unmarshal(pe.Payload, &pj)
+				pj := projectionPool.Get().(*gravity_sdk_types_projection.Projection)
+				err = gravity_sdk_types_projection.Unmarshal(pe.Payload, pj)
 				if err != nil {
 					log.WithFields(logrus.Fields{
 						"pipeline": event.PipelineID,
@@ -76,7 +100,9 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 				}
 
 				event.Sequence = pe.Sequence
-				event.Payload = &pj
+				event.Payload = pj
+
+				pipelineEventPool.Put(pe)
 			}
 
 			done(msg)
