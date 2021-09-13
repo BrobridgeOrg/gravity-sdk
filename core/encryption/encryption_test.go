@@ -8,7 +8,7 @@ import (
 func TestEncryption(t *testing.T) {
 
 	en := NewEncryption()
-	en.SetKey("TestingKey")
+	en.SetAccessKey("TestingKey")
 
 	data, err := en.Encrypt([]byte("test"))
 	if err != nil {
