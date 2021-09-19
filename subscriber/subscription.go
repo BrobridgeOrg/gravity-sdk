@@ -6,7 +6,7 @@ import (
 	gravity_sdk_types_pipeline_event "github.com/BrobridgeOrg/gravity-sdk/types/pipeline_event"
 	gravity_sdk_types_projection "github.com/BrobridgeOrg/gravity-sdk/types/projection"
 	gravity_sdk_types_snapshot_record "github.com/BrobridgeOrg/gravity-sdk/types/snapshot_record"
-	pcf "github.com/cfsghost/parallel-chunked-flow"
+	sdf "github.com/BrobridgeOrg/sequential-data-flow"
 	nats "github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
@@ -32,7 +32,7 @@ var projectionPool = sync.Pool{
 type Subscription struct {
 	subscriber      *Subscriber
 	sub             *nats.Subscription
-	buffer          *pcf.ParallelChunkedFlow
+	buffer          *sdf.Flow
 	eventHandler    MessageHandler
 	snapshotHandler MessageHandler
 }
@@ -53,63 +53,13 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 		},
 	}
 
-	// Create Options object
-	options := &pcf.Options{
-		BufferSize: bufferSize,
-		ChunkSize:  1024,
-		ChunkCount: 128,
-		Handler: func(data interface{}, done func(interface{})) {
+	// Initializing sequential data flow
+	options := sdf.NewOptions()
+	options.BufferSize = 10240
+	options.WorkerCount = subscription.subscriber.options.WorkerCount
+	options.Handler = subscription.prepare
 
-			msg := data.(*Message)
-
-			switch msg.Type {
-			case MESSAGE_TYPE_SNAPSHOT:
-
-				event := msg.Payload.(*SnapshotEvent)
-
-				// Parsing snapshot record
-				snapshotRecord := snapshotRecordPool.Get().(*gravity_sdk_types_snapshot_record.SnapshotRecord)
-				err := gravity_sdk_types_snapshot_record.Unmarshal(event.RawData, snapshotRecord)
-				if err != nil {
-					log.Error(err)
-					return
-				}
-
-				event.Payload = snapshotRecord
-			case MESSAGE_TYPE_EVENT:
-
-				event := msg.Payload.(*DataEvent)
-
-				// Parsing event
-				pe := pipelineEventPool.Get().(*gravity_sdk_types_pipeline_event.PipelineEvent)
-				err := gravity_sdk_types_pipeline_event.Unmarshal(event.RawData, pe)
-				if err != nil {
-					log.WithFields(logrus.Fields{
-						"pipeline": event.PipelineID,
-					}).Errorf("pipeline event - %v", err)
-					return
-				}
-
-				pj := projectionPool.Get().(*gravity_sdk_types_projection.Projection)
-				err = gravity_sdk_types_projection.Unmarshal(pe.Payload, pj)
-				if err != nil {
-					log.WithFields(logrus.Fields{
-						"pipeline": event.PipelineID,
-					}).Error(err)
-					return
-				}
-
-				event.Sequence = pe.Sequence
-				event.Payload = pj
-
-				pipelineEventPool.Put(pe)
-			}
-
-			done(msg)
-		},
-	}
-
-	subscription.buffer = pcf.NewParallelChunkedFlow(options)
+	subscription.buffer = sdf.NewFlow(options)
 
 	return subscription
 }
@@ -120,6 +70,56 @@ func (s *Subscription) start() {
 			s.handle(msg.(*Message))
 		}
 	}()
+}
+
+func (s *Subscription) prepare(data interface{}, done func(interface{})) {
+
+	msg := data.(*Message)
+
+	switch msg.Type {
+	case MESSAGE_TYPE_SNAPSHOT:
+
+		event := msg.Payload.(*SnapshotEvent)
+
+		// Parsing snapshot record
+		snapshotRecord := snapshotRecordPool.Get().(*gravity_sdk_types_snapshot_record.SnapshotRecord)
+		err := gravity_sdk_types_snapshot_record.Unmarshal(event.RawData, snapshotRecord)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+
+		event.Payload = snapshotRecord
+	case MESSAGE_TYPE_EVENT:
+
+		event := msg.Payload.(*DataEvent)
+
+		// Parsing event
+		pe := pipelineEventPool.Get().(*gravity_sdk_types_pipeline_event.PipelineEvent)
+		err := gravity_sdk_types_pipeline_event.Unmarshal(event.RawData, pe)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"pipeline": event.PipelineID,
+			}).Errorf("pipeline event - %v", err)
+			return
+		}
+
+		pj := projectionPool.Get().(*gravity_sdk_types_projection.Projection)
+		err = gravity_sdk_types_projection.Unmarshal(pe.Payload, pj)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"pipeline": event.PipelineID,
+			}).Error(err)
+			return
+		}
+
+		event.Sequence = pe.Sequence
+		event.Payload = pj
+
+		pipelineEventPool.Put(pe)
+	}
+
+	done(msg)
 }
 
 func (s *Subscription) handle(msg *Message) {
