@@ -10,6 +10,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"time"
 	"unsafe"
 
 	"github.com/golang/protobuf/ptypes"
@@ -221,14 +222,28 @@ func GetValueFromInterface(data interface{}) (*Value, error) {
 			Type:  DataType_ARRAY,
 			Array: &value,
 		}, nil
+	}
 
-	default:
-		data, _ := getBytes(data)
+	switch d := data.(type) {
+	case time.Time:
+		t, err := ptypes.TimestampProto(d)
+		if err != nil {
+			fmt.Println(err)
+			return nil, err
+		}
+
 		return &Value{
-			Type:  DataType_BINARY,
-			Value: data,
+			Type:      DataType_TIME,
+			Timestamp: t,
 		}, nil
 	}
+
+	// binary by default
+	value, _ := getBytes(data)
+	return &Value{
+		Type:  DataType_BINARY,
+		Value: value,
+	}, nil
 }
 
 func getBytes(data interface{}) ([]byte, error) {
