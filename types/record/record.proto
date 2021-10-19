@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "./;gravity_sdk_types_record";
+option go_package = "github.com/BrobridgeOrg/gravity-sdk/types/record";
 
 package gravity.sdk.types.record;
 

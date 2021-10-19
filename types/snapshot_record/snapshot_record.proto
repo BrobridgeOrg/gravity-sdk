@@ -1,12 +1,13 @@
 syntax = "proto3";
 
-option go_package = "./;gravity_sdk_types_snapshot_record";
+option go_package = "github.com/BrobridgeOrg/gravity-sdk/types/snapshot_record";
 
 package gravity.sdk.types.snapshot_record;
 
 import "google/protobuf/struct.proto";
+import "types/record/record.proto";
 
 message SnapshotRecord {
-    google.protobuf.Struct meta = 1;
-    google.protobuf.Struct payload = 2;
+  google.protobuf.Struct meta = 1;
+  gravity.sdk.types.record.Value payload = 2;
 }

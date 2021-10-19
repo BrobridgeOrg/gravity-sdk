@@ -1,4 +1,4 @@
-package gravity_sdk_types_record
+package record
 
 import (
 	"bytes"
@@ -14,9 +14,11 @@ import (
 	"unsafe"
 
 	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
+	NotFoundPrimaryKey    = errors.New("Not found primary key")
 	NotUnsignedIntegerErr = errors.New("Not unisgned integer")
 	NotIntegerErr         = errors.New("Not integer")
 	NotFloatErr           = errors.New("Not float")
@@ -39,11 +41,11 @@ func GetValue(value *Value) interface{} {
 
 	switch value.Type {
 	case DataType_FLOAT64:
-		return math.Float64frombits(binary.LittleEndian.Uint64(value.Value))
+		return math.Float64frombits(binary.BigEndian.Uint64(value.Value))
 	case DataType_INT64:
-		return int64(binary.LittleEndian.Uint64(value.Value))
+		return int64(binary.BigEndian.Uint64(value.Value))
 	case DataType_UINT64:
-		return uint64(binary.LittleEndian.Uint64(value.Value))
+		return uint64(binary.BigEndian.Uint64(value.Value))
 	case DataType_BOOLEAN:
 		return int8(value.Value[0]) & 1
 	case DataType_STRING:
@@ -148,6 +150,12 @@ func GetValueFromInterface(data interface{}) (*Value, error) {
 		data, _ := getBytesFromInteger(data)
 		return &Value{
 			Type:  DataType_INT64,
+			Value: data,
+		}, nil
+	case reflect.Uint64:
+		data, _ := getBytesFromUnsignedInteger(data)
+		return &Value{
+			Type:  DataType_UINT64,
 			Value: data,
 		}, nil
 	case reflect.Float64:
@@ -269,15 +277,15 @@ func getBytesFromUnsignedInteger(data interface{}) ([]byte, error) {
 	v := reflect.ValueOf(data)
 	switch v.Kind() {
 	case reflect.Uint:
-		binary.LittleEndian.PutUint64(buf, uint64(data.(uint)))
+		binary.BigEndian.PutUint64(buf, uint64(data.(uint)))
 	case reflect.Uint8:
-		binary.LittleEndian.PutUint64(buf, uint64(data.(uint8)))
+		binary.BigEndian.PutUint64(buf, uint64(data.(uint8)))
 	case reflect.Uint16:
-		binary.LittleEndian.PutUint64(buf, uint64(data.(uint16)))
+		binary.BigEndian.PutUint64(buf, uint64(data.(uint16)))
 	case reflect.Uint32:
-		binary.LittleEndian.PutUint64(buf, uint64(data.(uint32)))
+		binary.BigEndian.PutUint64(buf, uint64(data.(uint32)))
 	case reflect.Uint64:
-		binary.LittleEndian.PutUint64(buf, data.(uint64))
+		binary.BigEndian.PutUint64(buf, data.(uint64))
 	default:
 		return nil, NotUnsignedIntegerErr
 	}
@@ -292,15 +300,15 @@ func getBytesFromInteger(data interface{}) ([]byte, error) {
 	v := reflect.ValueOf(data)
 	switch v.Kind() {
 	case reflect.Int:
-		binary.LittleEndian.PutUint64(buf, uint64(data.(int)))
+		binary.BigEndian.PutUint64(buf, uint64(data.(int)))
 	case reflect.Int8:
-		binary.LittleEndian.PutUint64(buf, uint64(data.(int8)))
+		binary.BigEndian.PutUint64(buf, uint64(data.(int8)))
 	case reflect.Int16:
-		binary.LittleEndian.PutUint64(buf, uint64(data.(int16)))
+		binary.BigEndian.PutUint64(buf, uint64(data.(int16)))
 	case reflect.Int32:
-		binary.LittleEndian.PutUint64(buf, uint64(data.(int32)))
+		binary.BigEndian.PutUint64(buf, uint64(data.(int32)))
 	case reflect.Int64:
-		binary.LittleEndian.PutUint64(buf, uint64(data.(int64)))
+		binary.BigEndian.PutUint64(buf, uint64(data.(int64)))
 	default:
 		return nil, NotIntegerErr
 	}
@@ -315,9 +323,9 @@ func getBytesFromFloat(data interface{}) ([]byte, error) {
 	v := reflect.ValueOf(data)
 	switch v.Kind() {
 	case reflect.Float32:
-		binary.Write(&buf, binary.LittleEndian, data)
+		binary.Write(&buf, binary.BigEndian, data)
 	case reflect.Float64:
-		binary.Write(&buf, binary.LittleEndian, data)
+		binary.Write(&buf, binary.BigEndian, data)
 	default:
 		return nil, NotFloatErr
 	}
@@ -355,4 +363,105 @@ func UnmarshalJSON(data []byte, record *Record) error {
 	}
 
 	return UnmarshalMapData(jsonObj, record)
+}
+
+func Unmarshal(data []byte, record *Record) error {
+	return proto.Unmarshal(data, record)
+}
+
+func Marshal(record *Record) ([]byte, error) {
+	return proto.Marshal(record)
+}
+
+func GetField(fields []*Field, fieldName string) *Field {
+
+	for _, field := range fields {
+		if field.Name == fieldName {
+			return field
+		}
+	}
+
+	return nil
+}
+
+func (record *Record) GetPayload() *Value {
+
+	value := &Value{
+		Type: DataType_MAP,
+		Map: &MapValue{
+			Fields: record.Fields,
+		},
+	}
+
+	return value
+}
+
+func (record *Record) GetPrimaryKeyValue() (*Value, error) {
+
+	value := &Value{
+		Type: DataType_MAP,
+		Map: &MapValue{
+			Fields: record.Fields,
+		},
+	}
+
+	v, err := GetValueByPath(value, record.PrimaryKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func GetValueByPath(value *Value, key string) (*Value, error) {
+	var err error
+	state := value
+	parser := parse(key)
+	token := parser.nextItem()
+	for token.typ != tokenEnd && token.typ != tokenError {
+		if state, err = getValue(state, token); err != nil {
+			return nil, err
+		}
+		token = parser.nextItem()
+	}
+	if token.typ == tokenError {
+		return nil, fmt.Errorf(token.val)
+	}
+	return state, nil
+}
+
+func getValue(value *Value, key token) (*Value, error) {
+
+	switch value.Type {
+	case DataType_MAP:
+		switch key.typ {
+		case tokenIdentifier:
+			field := GetField(value.Map.Fields, key.val)
+			if field != nil {
+				return field.Value, nil
+			}
+
+			return nil, fmt.Errorf("key not found")
+		default:
+			return nil, fmt.Errorf("key not found")
+		}
+	case DataType_ARRAY:
+		switch key.typ {
+		case tokenArrayIndex:
+			index, err := strconv.Atoi(key.val)
+			if err != nil {
+				return nil, fmt.Errorf("expected array index, but got %s", key.val)
+			}
+
+			if index < 0 || index >= len(value.Array.Elements) {
+				return nil, fmt.Errorf("index out of bounds %s", key.val)
+			}
+			return value.Array.Elements[index], nil
+		default:
+			return nil, fmt.Errorf("key not found")
+		}
+	default:
+		return nil, fmt.Errorf("can't deal with this type %d", value.Type)
+
+	}
 }

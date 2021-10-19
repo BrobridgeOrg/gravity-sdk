@@ -1,6 +1,7 @@
 syntax = "proto3";
 
-option go_package = "./;gravity_sdk_types_pipeline_event";
+//option go_package = "./;gravity_sdk_types_pipeline_event";
+option go_package = "github.com/BrobridgeOrg/gravity-sdk/types/pipeline_event";
 
 package gravity.sdk.types.pipeline_event;
 

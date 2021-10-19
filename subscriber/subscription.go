@@ -4,7 +4,9 @@ import (
 	"sync"
 
 	gravity_sdk_types_pipeline_event "github.com/BrobridgeOrg/gravity-sdk/types/pipeline_event"
-	gravity_sdk_types_projection "github.com/BrobridgeOrg/gravity-sdk/types/projection"
+	gravity_sdk_types_record "github.com/BrobridgeOrg/gravity-sdk/types/record"
+
+	//	gravity_sdk_types_projection "github.com/BrobridgeOrg/gravity-sdk/types/projection"
 	gravity_sdk_types_snapshot_record "github.com/BrobridgeOrg/gravity-sdk/types/snapshot_record"
 	sdf "github.com/BrobridgeOrg/sequential-data-flow"
 	nats "github.com/nats-io/nats.go"
@@ -23,12 +25,19 @@ var snapshotRecordPool = sync.Pool{
 	},
 }
 
+var recordPool = sync.Pool{
+	New: func() interface{} {
+		return &gravity_sdk_types_record.Record{}
+	},
+}
+
+/*
 var projectionPool = sync.Pool{
 	New: func() interface{} {
 		return &gravity_sdk_types_projection.Projection{}
 	},
 }
-
+*/
 type Subscription struct {
 	subscriber      *Subscriber
 	sub             *nats.Subscription
@@ -42,14 +51,14 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 	subscription := &Subscription{
 		subscriber: subscriber,
 		eventHandler: func(msg *Message) {
-			event := msg.Payload.(*SnapshotEvent)
-			msg.Ack()
-			snapshotRecordPool.Put(event)
-		},
-		snapshotHandler: func(msg *Message) {
 			event := msg.Payload.(*DataEvent)
 			msg.Ack()
-			projectionPool.Put(event)
+			dataEventPool.Put(event)
+		},
+		snapshotHandler: func(msg *Message) {
+			event := msg.Payload.(*SnapshotEvent)
+			msg.Ack()
+			snapshotEventPool.Put(event)
 		},
 	}
 
@@ -104,8 +113,10 @@ func (s *Subscription) prepare(data interface{}, done func(interface{})) {
 			return
 		}
 
-		pj := projectionPool.Get().(*gravity_sdk_types_projection.Projection)
-		err = gravity_sdk_types_projection.Unmarshal(pe.Payload, pj)
+		record := recordPool.Get().(*gravity_sdk_types_record.Record)
+		err = gravity_sdk_types_record.Unmarshal(pe.Payload, record)
+		//		pj := projectionPool.Get().(*gravity_sdk_types_projection.Projection)
+		//		err = gravity_sdk_types_projection.Unmarshal(pe.Payload, pj)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"pipeline": event.PipelineID,
@@ -114,7 +125,7 @@ func (s *Subscription) prepare(data interface{}, done func(interface{})) {
 		}
 
 		event.Sequence = pe.Sequence
-		event.Payload = pj
+		event.Payload = record
 
 		pipelineEventPool.Put(pe)
 	}

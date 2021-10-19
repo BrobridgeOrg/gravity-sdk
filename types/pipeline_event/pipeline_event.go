@@ -1,4 +1,4 @@
-package gravity_sdk_types_pipeline_event
+package pipeline_event
 
 import (
 	"github.com/golang/protobuf/proto"
