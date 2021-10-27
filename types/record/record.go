@@ -500,7 +500,7 @@ func prepareValue(value *Value) interface{} {
 
 }
 
-func FieldsToMap(fields []*Field) map[string]interface{} {
+func ConvertFieldsToMap(fields []*Field) map[string]interface{} {
 
 	payload := make(map[string]interface{}, len(fields))
 
