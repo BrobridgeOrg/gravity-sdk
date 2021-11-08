@@ -102,7 +102,7 @@ func GetDefinition(record *Record) (*RecordDef, error) {
 	return recordDef, nil
 }
 
-func GetValueFromInterface(data interface{}) (*Value, error) {
+func CreateValue(t DataType, data interface{}) (*Value, error) {
 
 	if data == nil {
 		return &Value{
@@ -110,77 +110,45 @@ func GetValueFromInterface(data interface{}) (*Value, error) {
 		}, nil
 	}
 
-	switch data.(type) {
-	case json.Number:
-
-		if n, err := data.(json.Number).Int64(); err == nil {
-			// Integer
-			bytes, err := getBytesFromInteger(n)
-			if err == nil {
-				return &Value{
-					Type:  DataType_INT64,
-					Value: bytes,
-				}, nil
-			}
-		} else if f, err := data.(json.Number).Float64(); err == nil {
-			// Float
-			bytes, err := getBytesFromFloat(f)
-			if err == nil {
-				return &Value{
-					Type:  DataType_FLOAT64,
-					Value: bytes,
-				}, nil
-			}
-		}
+	value := &Value{
+		Type: t,
 	}
-	/*
-		// Unsigned integer
-		bytes, err := t.getBytesFromUnsignedInteger(data)
-		if err == nil {
-			return &transmitter.Value{
-				Type:  transmitter.DataType_INT64,
-				Value: bytes,
-			}, nil
-		}
-	*/
-	v := reflect.ValueOf(data)
 
-	switch v.Kind() {
-	case reflect.Int64:
+	switch t {
+	case DataType_INT64:
 		data, _ := getBytesFromInteger(data)
-		return &Value{
-			Type:  DataType_INT64,
-			Value: data,
-		}, nil
-	case reflect.Uint64:
+		value.Value = data
+	case DataType_UINT64:
 		data, _ := getBytesFromUnsignedInteger(data)
-		return &Value{
-			Type:  DataType_UINT64,
-			Value: data,
-		}, nil
-	case reflect.Float64:
+		value.Value = data
+	case DataType_FLOAT64:
 		data, _ := getBytesFromFloat(data)
-		return &Value{
-			Type:  DataType_FLOAT64,
-			Value: data,
-		}, nil
-	case reflect.Bool:
+		value.Value = data
+	case DataType_BOOLEAN:
 		data, _ := getBytes(data)
-		return &Value{
-			Type:  DataType_BOOLEAN,
-			Value: data,
-		}, nil
-	case reflect.String:
-		return &Value{
-			Type:  DataType_STRING,
-			Value: StrToBytes(data.(string)),
-		}, nil
-	case reflect.Map:
+		value.Value = data
+	case DataType_STRING:
+		value.Value = StrToBytes(data.(string))
+	case DataType_TIME:
+
+		t, err := ptypes.TimestampProto(data.(time.Time))
+		if err != nil {
+			fmt.Println(err)
+			return nil, err
+		}
+
+		value.Timestamp = t
+	case DataType_BINARY:
+		data, _ := getBytes(data)
+		value.Value = data
+	case DataType_MAP:
 
 		// Prepare map value
-		value := MapValue{
+		mv := &MapValue{
 			Fields: make([]*Field, 0),
 		}
+
+		v := reflect.ValueOf(data)
 
 		// Convert each key-value set
 		for _, key := range v.MapKeys() {
@@ -198,18 +166,17 @@ func GetValueFromInterface(data interface{}) (*Value, error) {
 				Value: v,
 			}
 
-			value.Fields = append(value.Fields, &field)
+			mv.Fields = append(mv.Fields, &field)
 		}
 
-		return &Value{
-			Type: DataType_MAP,
-			Map:  &value,
-		}, nil
+		value.Map = mv
 
-	case reflect.Slice:
+	case DataType_ARRAY:
+
+		v := reflect.ValueOf(data)
 
 		// Prepare map value
-		value := ArrayValue{
+		av := &ArrayValue{
 			Elements: make([]*Value, 0, v.Len()),
 		}
 
@@ -223,35 +190,62 @@ func GetValueFromInterface(data interface{}) (*Value, error) {
 				continue
 			}
 
-			value.Elements = append(value.Elements, v)
+			av.Elements = append(av.Elements, v)
 		}
 
+		value.Array = av
+	}
+
+	return value, nil
+}
+
+func GetValueFromInterface(data interface{}) (*Value, error) {
+
+	if data == nil {
 		return &Value{
-			Type:  DataType_ARRAY,
-			Array: &value,
+			Type: DataType_NULL,
 		}, nil
 	}
 
+	switch data.(type) {
+	case json.Number:
+
+		if n, err := data.(json.Number).Int64(); err == nil {
+			// Integer
+			return CreateValue(DataType_INT64, n)
+		} else if f, err := data.(json.Number).Float64(); err == nil {
+			// Float
+			return CreateValue(DataType_FLOAT64, f)
+		}
+	}
+
+	v := reflect.ValueOf(data)
+
+	switch v.Kind() {
+	case reflect.Int64:
+		return CreateValue(DataType_INT64, data)
+	case reflect.Uint64:
+		return CreateValue(DataType_UINT64, data)
+	case reflect.Float64:
+		return CreateValue(DataType_FLOAT64, data)
+	case reflect.Bool:
+		return CreateValue(DataType_BOOLEAN, data)
+	case reflect.String:
+		return CreateValue(DataType_STRING, data)
+	case reflect.Map:
+		return CreateValue(DataType_MAP, data)
+	case reflect.Slice:
+		return CreateValue(DataType_ARRAY, data)
+	}
+
+	// Time
 	switch d := data.(type) {
 	case time.Time:
-		t, err := ptypes.TimestampProto(d)
-		if err != nil {
-			fmt.Println(err)
-			return nil, err
-		}
-
-		return &Value{
-			Type:      DataType_TIME,
-			Timestamp: t,
-		}, nil
+		return CreateValue(DataType_TIME, d)
 	}
 
 	// binary by default
-	value, _ := getBytes(data)
-	return &Value{
-		Type:  DataType_BINARY,
-		Value: value,
-	}, nil
+	return CreateValue(DataType_BINARY, data)
 }
 
 func getBytes(data interface{}) ([]byte, error) {
