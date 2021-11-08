@@ -459,3 +459,49 @@ func getValue(value *Value, key token) (*Value, error) {
 
 	}
 }
+
+func prepareValue(value *Value) interface{} {
+
+	switch value.Type {
+	case DataType_MAP:
+
+		mapFields := value.Map.Fields
+		payload := make(map[string]interface{}, len(mapFields))
+
+		for _, mapField := range mapFields {
+
+			payload[mapField.Name] = prepareValue(mapField.Value)
+		}
+
+		return payload
+
+	case DataType_ARRAY:
+
+		arrayFields := value.Array.Elements
+		payload := make([]interface{}, len(arrayFields))
+
+		for _, arrayField := range arrayFields {
+			payload = append(payload, prepareValue(arrayField))
+		}
+
+		return payload
+
+	default:
+		return GetValue(value)
+	}
+
+	return GetValue(value)
+
+}
+
+func ConvertFieldsToMap(fields []*Field) map[string]interface{} {
+
+	payload := make(map[string]interface{}, len(fields))
+
+	for _, field := range fields {
+		value := prepareValue(field.Value)
+		payload[field.Name] = value
+	}
+
+	return payload
+}
