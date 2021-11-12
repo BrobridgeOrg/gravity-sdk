@@ -22,6 +22,11 @@ const (
 	SubscriberType_Exporter    subscriber_manager_pb.SubscriberType = subscriber_manager_pb.SubscriberType_EXPORTER
 )
 
+var SubscriberTypes map[string]subscriber_manager_pb.SubscriberType = map[string]subscriber_manager_pb.SubscriberType{
+	"transmitter": subscriber_manager_pb.SubscriberType_TRANSMITTER,
+	"exporter":    subscriber_manager_pb.SubscriberType_EXPORTER,
+}
+
 type MessageHandler func(*Message)
 
 type Subscriber struct {
