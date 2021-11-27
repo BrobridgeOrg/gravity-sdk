@@ -69,6 +69,7 @@ func (pipeline *Pipeline) Initialize() error {
 		return nil
 	}
 
+	// Initial load is enabled
 	if pipeline.subscriber.options.InitialLoad.Mode == "snapshot" {
 
 		// check states for snapshot
@@ -84,7 +85,7 @@ func (pipeline *Pipeline) Initialize() error {
 			snapshot := NewSnapshot(pipeline)
 			pipeline.snapshot = snapshot
 
-			// Using snapshot last sequence to initialize pipeline
+			// Using snapshot last sequence from server to initialize pipeline
 			pipeline.lastSeq = state.LastSeq
 
 			// Create snapshot
@@ -106,6 +107,10 @@ func (pipeline *Pipeline) Initialize() error {
 	pipeline.isReady = true
 
 	return nil
+}
+
+func (pipeline *Pipeline) GetID() uint64 {
+	return pipeline.id
 }
 
 func (pipeline *Pipeline) UpdateLastSequence(sequence uint64) {
@@ -278,14 +283,16 @@ func (pipeline *Pipeline) suspend() error {
 		"pipeline": pipeline.id,
 	}).Warn("pipeline suspended")
 
-	// Force to flush
-	pipelineState, _ := pipeline.subscriber.options.StateStore.GetPipelineState(pipeline.id)
-	err = pipelineState.Flush()
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"pipeline": pipeline.id,
-			"lastSeq":  pipeline.lastSeq,
-		}).Errorf("Failed to flush state store: %s", err)
+	if pipeline.subscriber.options.StateStore != nil {
+		// Force to flush
+		pipelineState, _ := pipeline.subscriber.options.StateStore.GetPipelineState(pipeline.id)
+		err = pipelineState.Flush()
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"pipeline": pipeline.id,
+				"lastSeq":  pipeline.lastSeq,
+			}).Errorf("Failed to flush state store: %s", err)
+		}
 	}
 
 	return nil

@@ -1,9 +1,7 @@
 package main
 
 /*
-typedef struct {
-	char *message;
-} GravityError;
+#include "./error.h"
 */
 import "C"
 import "unsafe"

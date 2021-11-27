@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"github.com/golang/protobuf/ptypes"
+	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -365,6 +366,18 @@ func Unmarshal(data []byte, record *Record) error {
 
 func Marshal(record *Record) ([]byte, error) {
 	return proto.Marshal(record)
+}
+
+func MarshalJSON(record *Record) ([]byte, error) {
+
+	var packet map[string]interface{}
+
+	fields := record.GetFields()
+	packet["payload"] = ConvertFieldsToMap(fields)
+	packet["eventName"] = record.EventName
+	packet["collection"] = record.Table
+
+	return jsoniter.Marshal(packet)
 }
 
 func GetField(fields []*Field, fieldName string) *Field {

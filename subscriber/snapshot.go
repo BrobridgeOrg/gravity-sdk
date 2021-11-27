@@ -70,7 +70,6 @@ func (snapshot *Snapshot) getLastPosition() *CollectionSnapshot {
 	return position
 }
 
-//func (snapshot *Snapshot) pull(collection string, lastKey []byte) ([]*gravity_sdk_types_snapshot_record.SnapshotRecord, error) {
 func (snapshot *Snapshot) pull(collection string, lastKey []byte) ([][]byte, error) {
 
 	v, ok := snapshot.collections.Load(collection)
@@ -212,7 +211,6 @@ func (snapshot *Snapshot) Close() error {
 	return nil
 }
 
-//func (snapshot *Snapshot) Pull() ([]*gravity_sdk_types_snapshot_record.SnapshotRecord, error) {
 func (snapshot *Snapshot) Pull() (string, [][]byte, error) {
 
 	if !snapshot.isReady {
