@@ -30,6 +30,8 @@ typedef struct {
 	char *endpoint;
 	char *domain;
 	int batchSize;
+	char *appID;
+	char *accessKey;
 	bool verbose;
 } AdapterOptions;
 
@@ -68,6 +70,8 @@ typedef struct {
 	int workerCount;
 	int bufferSize;
 	int chunkSize;
+	char *appID;
+	char *accessKey;
 	bool verbose;
 	SubscriberInitialLoadOptions initialLoad;
 } SubscriberOptions;
@@ -149,6 +153,7 @@ extern GravityError* AdapterPublish(Adapter* ca, char* eventName, char* payload)
 extern ClientOptions* NewClientOptions();
 extern Client* NewClient();
 extern GravityError* ClientConnect(Client* c, char* host, ClientOptions* options);
+extern void ClientDisconnect(Client* c);
 extern void ClientSetDisconnectHandler(Client* c, ClientEventHandler callback);
 extern void ClientSetReconnectHandler(Client* c, ClientEventHandler callback);
 extern SubscriberOptions* NewSubscriberOptions();
@@ -163,6 +168,7 @@ extern GravityError* SubscriberAddAllPipelines(Subscriber* s);
 extern GravityError* SubscriberSubscribeToPipelines(Subscriber* s, GoSlice pipelines);
 extern GravityError* SubscriberSubscribeToCollection(Subscriber* s, char* collection, char** tables, int length);
 extern void SubscriberStart(Subscriber* s);
+extern void SubscriberStop(Subscriber* s);
 extern void SubscriberMessageAck(SubscriberMessage* m);
 
 #ifdef __cplusplus

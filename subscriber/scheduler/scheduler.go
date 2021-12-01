@@ -25,6 +25,7 @@ type Scheduler struct {
 	tasks     map[uint64]*Task
 	mutex     sync.RWMutex
 	completed chan struct{}
+	running   bool
 }
 
 func NewScheduler(options *Options) *Scheduler {
@@ -40,6 +41,8 @@ func NewScheduler(options *Options) *Scheduler {
 
 func (scheduler *Scheduler) Start() {
 
+	scheduler.running = true
+
 	// Initializing workers
 	for i := 0; i < scheduler.options.WorkerCount; i++ {
 		go scheduler.startWorker(i)
@@ -49,6 +52,9 @@ func (scheduler *Scheduler) Start() {
 }
 
 func (scheduler *Scheduler) Stop() {
+
+	scheduler.running = false
+
 	close(scheduler.prepared)
 	close(scheduler.signal)
 }
@@ -153,6 +159,11 @@ func (scheduler *Scheduler) GetAllTasks() []*Task {
 }
 
 func (scheduler *Scheduler) Trigger(signal SignalType) {
+
+	if !scheduler.running {
+		return
+	}
+
 	select {
 	case scheduler.signal <- signal:
 	default:

@@ -20,6 +20,8 @@ typedef struct {
 	int workerCount;
 	int bufferSize;
 	int chunkSize;
+	char *appID;
+	char *accessKey;
 	bool verbose;
 	SubscriberInitialLoadOptions initialLoad;
 } SubscriberOptions;
@@ -51,6 +53,7 @@ import (
 	"unsafe"
 
 	"github.com/BrobridgeOrg/gravity-sdk/core"
+	"github.com/BrobridgeOrg/gravity-sdk/core/keyring"
 	subscriber "github.com/BrobridgeOrg/gravity-sdk/subscriber"
 	gravity_sdk_types_record "github.com/BrobridgeOrg/gravity-sdk/types/record"
 	jsoniter "github.com/json-iterator/go"
@@ -69,6 +72,20 @@ func getSubscriberNativeOptions(options *C.SubscriberOptions) *subscriber.Option
 	opts.InitialLoad.Enabled = bool(options.initialLoad.enabled)
 	opts.InitialLoad.Mode = C.GoString(options.initialLoad.mode)
 	opts.InitialLoad.OmittedCount = uint64(options.initialLoad.omittedCount)
+
+	var appID string
+	if options.appID == nil {
+		appID = "anonymous"
+	} else {
+		appID = C.GoString(options.appID)
+	}
+
+	var accessKey string = ""
+	if options.accessKey != nil {
+		accessKey = C.GoString(options.accessKey)
+	}
+
+	opts.Key = keyring.NewKey(appID, accessKey)
 
 	return opts
 }
@@ -155,6 +172,8 @@ func NewSubscriberOptions() *C.SubscriberOptions {
 	sopts.workerCount = C.int(opts.WorkerCount)
 	sopts.bufferSize = C.int(opts.BufferSize)
 	sopts.chunkSize = C.int(opts.ChunkSize)
+	sopts.appID = C.CString("anonymous")
+	sopts.accessKey = nil
 	sopts.verbose = C.bool(opts.Verbose)
 	sopts.initialLoad.enabled = C.bool(opts.InitialLoad.Enabled)
 	sopts.initialLoad.mode = C.CString(opts.InitialLoad.Mode)
@@ -329,6 +348,14 @@ func SubscriberStart(s *C.Subscriber) {
 	sub := pointer.Restore(s.instance).(*subscriber.Subscriber)
 
 	sub.Start()
+}
+
+//export SubscriberStop
+func SubscriberStop(s *C.Subscriber) {
+
+	sub := pointer.Restore(s.instance).(*subscriber.Subscriber)
+
+	sub.Stop()
 }
 
 //export SubscriberMessageAck

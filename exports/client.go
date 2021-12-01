@@ -37,6 +37,8 @@ func NewClient() *C.Client {
 
 	c := (*C.Client)(C.malloc(C.size_t(unsafe.Sizeof(C.Client{}))))
 	c.instance = pointer.Save(client)
+	c.disconnectHandler = nil
+	c.reconnectHandler = nil
 
 	return c
 }
@@ -53,9 +55,19 @@ func ClientConnect(c *C.Client, host *C.char, options *C.ClientOptions) *C.Gravi
 	opts.MaxPingsOutstanding = int(options.maxPingsOutstanding)
 	opts.MaxReconnects = int(options.maxReconnects)
 	opts.DisconnectHandler = func() {
+
+		if c.disconnectHandler == nil {
+			return
+		}
+
 		C.callClientEventHandler(c.disconnectHandler)
 	}
 	opts.ReconnectHandler = func() {
+
+		if c.reconnectHandler == nil {
+			return
+		}
+
 		C.callClientEventHandler(c.reconnectHandler)
 	}
 
@@ -65,6 +77,14 @@ func ClientConnect(c *C.Client, host *C.char, options *C.ClientOptions) *C.Gravi
 	}
 
 	return nil
+}
+
+//export ClientDisconnect
+func ClientDisconnect(c *C.Client) {
+
+	client := pointer.Restore(c.instance).(*core.Client)
+
+	client.Disconnect()
 }
 
 //export ClientSetDisconnectHandler

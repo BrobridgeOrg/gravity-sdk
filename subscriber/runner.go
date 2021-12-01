@@ -9,6 +9,7 @@ import (
 
 type Runner struct {
 	scheduler *scheduler.Scheduler
+	closed    chan struct{}
 }
 
 func NewRunner() *Runner {
@@ -18,6 +19,7 @@ func NewRunner() *Runner {
 
 	return &Runner{
 		scheduler: s,
+		closed:    make(chan struct{}),
 	}
 }
 
@@ -84,20 +86,32 @@ func (runner *Runner) Start() {
 	// First time to awake all tasks for initializing
 	runner.awakeAllTasks()
 
+	// Initializing delay timer
+	idleDelay := time.NewTimer(time.Second * 10)
+	defer idleDelay.Stop()
+
 	// Try to awake pipeline every 10 seconds
 	for {
-		<-time.After(time.Second * 10)
+		idleDelay.Reset(time.Second * 10)
 
-		if runner.scheduler.GetState() == scheduler.STATE_AWAKE {
-			continue
+		select {
+		case <-runner.closed:
+			log.Info("Closing runner")
+			return
+		case <-idleDelay.C:
+
+			if runner.scheduler.GetState() == scheduler.STATE_AWAKE {
+				continue
+			}
+
+			log.Info("Trying to awake all pipeline")
+
+			runner.awakeAllTasks()
 		}
-
-		log.Info("Trying to awake all pipeline")
-
-		runner.awakeAllTasks()
 	}
 }
 
 func (runner *Runner) Stop() {
+	runner.closed <- struct{}{}
 	runner.scheduler.Stop()
 }

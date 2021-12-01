@@ -10,6 +10,8 @@ typedef struct {
 	char *endpoint;
 	char *domain;
 	int batchSize;
+	char *appID;
+	char *accessKey;
 	bool verbose;
 } AdapterOptions;
 
@@ -23,6 +25,7 @@ import (
 
 	"github.com/BrobridgeOrg/gravity-sdk/adapter"
 	"github.com/BrobridgeOrg/gravity-sdk/core"
+	"github.com/BrobridgeOrg/gravity-sdk/core/keyring"
 	pointer "github.com/mattn/go-pointer"
 )
 
@@ -33,6 +36,20 @@ func getAdapterNativeOptions(options *C.AdapterOptions) *adapter.Options {
 	opts.Domain = C.GoString(options.domain)
 	opts.BatchSize = int(options.batchSize)
 	opts.Verbose = bool(options.verbose)
+
+	var appID string
+	if options.appID == nil {
+		appID = "anonymous"
+	} else {
+		appID = C.GoString(options.appID)
+	}
+
+	var accessKey string = ""
+	if options.accessKey != nil {
+		accessKey = C.GoString(options.accessKey)
+	}
+
+	opts.Key = keyring.NewKey(appID, accessKey)
 
 	return opts
 }
@@ -47,6 +64,8 @@ func NewAdapterOptions() *C.AdapterOptions {
 	aopts.endpoint = C.CString(opts.Endpoint)
 	aopts.domain = C.CString(opts.Domain)
 	aopts.batchSize = C.int(opts.BatchSize)
+	aopts.appID = C.CString("anonymous")
+	aopts.accessKey = nil
 	aopts.verbose = C.bool(opts.Verbose)
 
 	return aopts

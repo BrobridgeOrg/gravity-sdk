@@ -3,7 +3,7 @@
 
 typedef void (*ClientEventHandler)();
 
-static inline void callClientEventHandler(ClientEventHandler handler) {
+inline void callClientEventHandler(ClientEventHandler handler) {
 	handler();
 }
 

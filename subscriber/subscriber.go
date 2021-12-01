@@ -39,6 +39,8 @@ type Subscriber struct {
 	subscription  *Subscription
 	eventHandler  *EventHandler
 	runner        *Runner
+
+	closed chan struct{}
 }
 
 func NewSubscriber(options *Options) *Subscriber {
@@ -55,6 +57,7 @@ func NewSubscriber(options *Options) *Subscriber {
 		pipelines:     make(map[uint64]*Pipeline),
 		collectionMap: make(map[string][]string),
 		runner:        NewRunner(),
+		closed:        make(chan struct{}),
 	}
 
 	subscriber.subscription = NewSubscription(subscriber, options.BufferSize)
@@ -219,15 +222,31 @@ func (sub *Subscriber) Start() {
 	}
 
 	go func() {
-		for {
-			err := sub.healthCheck()
-			if err != nil {
-				log.Error(err)
-			}
+		// Initializing delay timer
+		idleDelay := time.NewTimer(time.Second * 30)
+		defer idleDelay.Stop()
 
-			<-time.After(time.Second * 30)
+		for {
+			idleDelay.Reset(time.Second * 10)
+
+			select {
+			case <-sub.closed:
+				log.Info("Closing subcriber")
+				return
+			case <-idleDelay.C:
+
+				err := sub.healthCheck()
+				if err != nil {
+					log.Error(err)
+				}
+			}
 		}
 	}()
+}
+
+func (sub *Subscriber) Stop() {
+	sub.closed <- struct{}{}
+	sub.runner.Stop()
 }
 
 func (sub *Subscriber) SetEventHandler(cb MessageHandler) {
