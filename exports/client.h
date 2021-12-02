@@ -10,7 +10,7 @@ inline void callClientEventHandler(ClientEventHandler handler) {
 typedef struct {
 	char *appID;
 	char *appKey;
-	int64_t pingInterval;
+	long long int pingInterval;
 	int maxPingsOutstanding;
 	int maxReconnects;
 } ClientOptions;

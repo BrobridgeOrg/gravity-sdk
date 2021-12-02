@@ -43,7 +43,6 @@ typedef struct {
 
 #line 3 "client.go"
 
-#include <stdint.h>
 #include "./error.h"
 #include "./client.h"
 
@@ -52,7 +51,6 @@ typedef struct {
 #line 3 "subscriber.go"
 
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include "./error.h"
@@ -61,7 +59,7 @@ typedef struct {
 typedef struct {
 	bool enabled;
 	char *mode;
-	uint64_t omittedCount;
+	long long unsigned int omittedCount;
 } SubscriberInitialLoadOptions;
 
 typedef struct {
@@ -78,7 +76,7 @@ typedef struct {
 
 typedef struct {
 	void *instance;
-	uint64_t pipelineId;
+	long long unsigned int pipelineId;
 	char *eventName;
 	char *collection;
 	char *payload;

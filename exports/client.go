@@ -1,7 +1,6 @@
 package main
 
 /*
-#include <stdint.h>
 #include "./error.h"
 #include "./client.h"
 */
