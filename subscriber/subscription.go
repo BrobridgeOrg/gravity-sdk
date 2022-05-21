@@ -1,153 +1,156 @@
 package subscriber
 
 import (
-	"sync"
+	"fmt"
 
-	gravity_sdk_types_pipeline_event "github.com/BrobridgeOrg/gravity-sdk/types/pipeline_event"
-	gravity_sdk_types_record "github.com/BrobridgeOrg/gravity-sdk/types/record"
-
-	//	gravity_sdk_types_projection "github.com/BrobridgeOrg/gravity-sdk/types/projection"
-	gravity_sdk_types_snapshot_record "github.com/BrobridgeOrg/gravity-sdk/types/snapshot_record"
-	sdf "github.com/BrobridgeOrg/sequential-data-flow"
-	nats "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
 
-var pipelineEventPool = sync.Pool{
-	New: func() interface{} {
-		return &gravity_sdk_types_pipeline_event.PipelineEvent{}
-	},
-}
+const productSubject = "$GVT.%s.DP.%s.>"
+const productEventSubject = "$GVT.%s.DP.%s.%s.EVENT.>"
+const productEventConsumer = "GVT_%s_SUBSCRIBER_%s"
 
-var snapshotRecordPool = sync.Pool{
-	New: func() interface{} {
-		return &gravity_sdk_types_snapshot_record.SnapshotRecord{}
-	},
-}
-
-var recordPool = sync.Pool{
-	New: func() interface{} {
-		return &gravity_sdk_types_record.Record{}
-	},
-}
-
-/*
-var projectionPool = sync.Pool{
-	New: func() interface{} {
-		return &gravity_sdk_types_projection.Projection{}
-	},
-}
-*/
 type Subscription struct {
-	subscriber      *Subscriber
-	sub             *nats.Subscription
-	buffer          *sdf.Flow
-	eventHandler    MessageHandler
-	snapshotHandler MessageHandler
+	subscriber          *Subscriber
+	handler             func(*nats.Msg)
+	domain              string
+	productName         string
+	startSequence       uint64
+	enabledInitialLoad  bool
+	partitions          []int
+	nativeSubscriptions map[string]*nats.Subscription
+	subOpts             []nats.SubOpt
 }
+type SubscriptionOpt func(*Subscription)
 
-func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
+func NewSubscription(s *Subscriber, domain string, productName string, handler func(*nats.Msg), opts ...SubscriptionOpt) *Subscription {
 
-	subscription := &Subscription{
-		subscriber: subscriber,
-		eventHandler: func(msg *Message) {
-			event := msg.Payload.(*DataEvent)
-			msg.Ack()
-			dataEventPool.Put(event)
-		},
-		snapshotHandler: func(msg *Message) {
-			event := msg.Payload.(*SnapshotEvent)
-			msg.Ack()
-			snapshotEventPool.Put(event)
-		},
+	sub := &Subscription{
+		subscriber:          s,
+		handler:             handler,
+		domain:              domain,
+		productName:         productName,
+		startSequence:       1,
+		partitions:          []int{-1},
+		nativeSubscriptions: make(map[string]*nats.Subscription),
+		subOpts:             make([]nats.SubOpt, 0),
 	}
 
-	// Initializing sequential data flow
-	options := sdf.NewOptions()
-	options.BufferSize = 10240
-	options.WorkerCount = subscription.subscriber.options.WorkerCount
-	options.Handler = subscription.prepare
-
-	subscription.buffer = sdf.NewFlow(options)
-
-	return subscription
-}
-
-func (s *Subscription) start() {
-	go func() {
-		for msg := range s.buffer.Output() {
-			s.handle(msg.(*Message))
-		}
-	}()
-}
-
-func (s *Subscription) prepare(data interface{}, done func(interface{})) {
-
-	msg := data.(*Message)
-
-	switch msg.Type {
-	case MESSAGE_TYPE_SNAPSHOT:
-
-		event := msg.Payload.(*SnapshotEvent)
-
-		// Parsing snapshot record
-		snapshotRecord := snapshotRecordPool.Get().(*gravity_sdk_types_snapshot_record.SnapshotRecord)
-		err := gravity_sdk_types_snapshot_record.Unmarshal(event.RawData, snapshotRecord)
-		if err != nil {
-			log.Error(err)
-			return
-		}
-
-		event.Payload = snapshotRecord
-	case MESSAGE_TYPE_EVENT:
-
-		event := msg.Payload.(*DataEvent)
-
-		// Parsing event
-		pe := pipelineEventPool.Get().(*gravity_sdk_types_pipeline_event.PipelineEvent)
-		err := gravity_sdk_types_pipeline_event.Unmarshal(event.RawData, pe)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"pipeline": event.PipelineID,
-			}).Errorf("pipeline event - %v", err)
-			return
-		}
-
-		record := recordPool.Get().(*gravity_sdk_types_record.Record)
-		err = gravity_sdk_types_record.Unmarshal(pe.Payload, record)
-		//		pj := projectionPool.Get().(*gravity_sdk_types_projection.Projection)
-		//		err = gravity_sdk_types_projection.Unmarshal(pe.Payload, pj)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"pipeline": event.PipelineID,
-			}).Error(err)
-			return
-		}
-
-		event.Sequence = pe.Sequence
-		event.Payload = record
-
-		pipelineEventPool.Put(pe)
+	for _, opt := range opts {
+		opt(sub)
 	}
 
-	done(msg)
+	return sub
 }
 
-func (s *Subscription) handle(msg *Message) {
-
-	switch msg.Type {
-	case MESSAGE_TYPE_EVENT:
-		s.eventHandler(msg)
-	case MESSAGE_TYPE_SNAPSHOT:
-		s.snapshotHandler(msg)
+func DeliverNew() func(*Subscription) {
+	return func(s *Subscription) {
+		s.subOpts = append(s.subOpts, nats.DeliverNew())
 	}
 }
 
-func (s *Subscription) Push(msg *Message) {
-	s.buffer.Push(msg)
+func StartSequence(seq uint64) func(*Subscription) {
+	return func(s *Subscription) {
+		s.startSequence = seq
+		s.subOpts = append(s.subOpts, nats.StartSequence(seq))
+	}
 }
 
-func (s *Subscription) Unsubscribe() error {
-	s.buffer.Close()
-	return s.sub.Unsubscribe()
+func InitialLoad(enabled bool) func(*Subscription) {
+	return func(s *Subscription) {
+		s.enabledInitialLoad = enabled
+	}
+}
+
+func Partition(partitions ...int) func(*Subscription) {
+	return func(s *Subscription) {
+
+		if len(partitions) == 0 {
+			return
+		}
+
+		for _, p := range partitions {
+			if p == -1 {
+				s.partitions = []int{-1}
+				return
+			}
+		}
+
+		s.partitions = partitions
+	}
+}
+
+func (sub *Subscription) subscribe(subject string) error {
+
+	js, err := sub.subscriber.client.GetJetStream()
+	if err != nil {
+		return err
+	}
+
+	var opts []nats.SubOpt
+
+	opts = append(sub.subOpts, nats.AckAll(), nats.MaxAckPending(20480))
+
+	// Specific consumer if subscriber name has been set
+	if len(sub.subscriber.name) > 0 {
+		consumerName := fmt.Sprintf(productEventConsumer, sub.domain, sub.subscriber.name)
+		opts = append(opts, nats.Durable(consumerName))
+	}
+
+	s, err := js.Subscribe(subject, func(msg *nats.Msg) {
+		sub.handler(msg)
+	}, opts...)
+	if err != nil {
+		return err
+	}
+
+	s.SetPendingLimits(-1, -1)
+	sub.subscriber.client.GetConnection().Flush()
+
+	sub.nativeSubscriptions[subject] = s
+
+	return nil
+}
+
+func (sub *Subscription) Subscribe() error {
+
+	// Subscribe to multiple partitions
+	for _, p := range sub.partitions {
+
+		var partition string
+		if p == -1 {
+			// All partitions
+			partition = "*"
+		} else {
+			// Specific parition
+			partition = fmt.Sprintf("%d", p)
+		}
+
+		subject := fmt.Sprintf(productEventSubject, sub.domain, sub.productName, partition)
+
+		log.WithFields(logrus.Fields{
+			"subject": subject,
+		}).Info("Subscribing to subject")
+
+		err := sub.subscribe(subject)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (sub *Subscription) Close() error {
+
+	// Unsubscribe all partitions
+	for _, s := range sub.nativeSubscriptions {
+		err := s.Unsubscribe()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

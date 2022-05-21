@@ -58,36 +58,10 @@ func (client *Client) Disconnect() {
 	client.eventbus.Close()
 }
 
-func (client *Client) ConnectToEndpoint(name string, domain string, options *EndpointOptions) (*Endpoint, error) {
-
-	// Attempt to get existing endpoint
-	endpoint := client.GetEndpoint(domain)
-	if endpoint != nil {
-		return endpoint, nil
-	}
-
-	// Create a new link to endpoint
-	endpoint = NewEndpoint(client, name, domain, options)
-	client.endpoints.Store(name, endpoint)
-
-	err := endpoint.Connect()
-	if err != nil {
-		return nil, err
-	}
-
-	return endpoint, nil
-}
-
-func (client *Client) GetEndpoint(name string) *Endpoint {
-
-	v, ok := client.endpoints.Load(name)
-	if ok {
-		return v.(*Endpoint)
-	}
-
-	return nil
-}
-
 func (client *Client) GetConnection() *nats.Conn {
 	return client.eventbus.GetConnection()
+}
+
+func (client *Client) GetJetStream() (nats.JetStreamContext, error) {
+	return client.eventbus.GetJetStream()
 }

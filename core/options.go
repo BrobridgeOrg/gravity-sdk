@@ -3,8 +3,6 @@ package core
 import "time"
 
 type Options struct {
-	AppID               string
-	AppKey              string
 	PingInterval        time.Duration
 	MaxPingsOutstanding int
 	MaxReconnects       int
@@ -14,8 +12,6 @@ type Options struct {
 
 func NewOptions() *Options {
 	return &Options{
-		AppID:               "",
-		AppKey:              "",
 		PingInterval:        10 * time.Second,
 		MaxPingsOutstanding: 3,
 		MaxReconnects:       -1,

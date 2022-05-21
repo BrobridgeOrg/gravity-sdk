@@ -1,27 +1,40 @@
 package adapter
 
 import (
-	"errors"
 	"fmt"
 	"os"
-	"time"
 
-	adapter_manager_pb "github.com/BrobridgeOrg/gravity-api/service/adapter_manager"
-	dsa "github.com/BrobridgeOrg/gravity-api/service/dsa"
 	"github.com/BrobridgeOrg/gravity-sdk/core"
-	buffered_input "github.com/cfsghost/buffered-input"
-	"github.com/golang/protobuf/proto"
-	uuid "github.com/satori/go.uuid"
+
+	jsoniter "github.com/json-iterator/go"
+	nats "github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
+)
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+const (
+	domainEvent = "$GVT.%s.EVENT.%s"
 )
 
 var log = logrus.New()
 
+type Message struct {
+	EventName string `json:"event"`
+	Payload   []byte `json:"payload"`
+}
+
+type PubAckFuture interface {
+	Ok() <-chan *nats.PubAck
+	Err() <-chan error
+	Msg() *nats.Msg
+}
+
 type AdapterConnector struct {
 	id      string
 	client  *core.Client
+	js      nats.JetStreamContext
 	options *Options
-	buffer  *buffered_input.BufferedInput
 }
 
 func NewAdapterConnector(options *Options) *AdapterConnector {
@@ -35,99 +48,19 @@ func NewAdapterConnector(options *Options) *AdapterConnector {
 
 	ac := &AdapterConnector{
 		options: options,
-		//		buffer:  NewRequestBuffer(options.BatchSize),
 	}
-
-	// Initializing buffered input
-	opts := buffered_input.NewOptions()
-	opts.ChunkSize = 1000
-	opts.ChunkCount = 1000
-	opts.Timeout = 50 * time.Millisecond
-	opts.Handler = ac.chunkHandler
-	ac.buffer = buffered_input.NewBufferedInput(opts)
 
 	return ac
 }
 
 func NewAdapterConnectorWithClient(client *core.Client, options *Options) *AdapterConnector {
 
-	subscriber := NewAdapterConnector(options)
-	subscriber.client = client
+	ac := NewAdapterConnector(options)
+	ac.client = client
+	js, _ := client.GetJetStream()
+	ac.js = js
 
-	return subscriber
-}
-
-func (ac *AdapterConnector) register(component string, adapterID string, name string) error {
-
-	log.WithFields(logrus.Fields{
-		"id": adapterID,
-	}).Info("Registering adapter")
-
-	// Prepare token
-	key := ac.options.Key
-	token, err := key.Encryption().PrepareToken()
-	if err != nil {
-		return err
-	}
-
-	request := adapter_manager_pb.RegisterAdapterRequest{
-		AdapterID: adapterID,
-		Name:      name,
-		Component: component,
-		AppID:     key.GetAppID(),
-		Token:     token,
-	}
-	msg, _ := proto.Marshal(&request)
-
-	respData, err := ac.request("adapter_manager.register", msg, true)
-	if err != nil {
-		return err
-	}
-
-	var reply adapter_manager_pb.RegisterAdapterReply
-	err = proto.Unmarshal(respData, &reply)
-	if err != nil {
-		return err
-	}
-
-	ac.id = adapterID
-
-	log.WithFields(logrus.Fields{
-		"id": adapterID,
-	}).Info("Adapter was registered")
-
-	return nil
-}
-
-func (ac *AdapterConnector) publish(requests []*Request) error {
-
-	var done int32 = 0
-	for {
-		success, count, err := ac.BatchPublish(requests)
-		if success {
-			return nil
-		}
-
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		for i := int32(0); i < count; i++ {
-			requests[done+i].IsCompleted = true
-			done++
-		}
-	}
-}
-
-func (ac *AdapterConnector) chunkHandler(chunk []interface{}) {
-
-	requests := make([]*Request, 0, len(chunk))
-	for _, request := range chunk {
-		requests = append(requests, request.(*Request))
-	}
-
-	ac.publish(requests)
+	return ac
 }
 
 func (ac *AdapterConnector) Connect(host string, options *core.Options) error {
@@ -140,99 +73,77 @@ func (ac *AdapterConnector) Disconnect() error {
 	return ac.Disconnect()
 }
 
-func (ac *AdapterConnector) Release() {
-	ac.buffer.Close()
-}
+func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[string]string) (*nats.PubAck, error) {
 
-func (ac *AdapterConnector) GetEndpoint() (*core.Endpoint, error) {
-	return ac.client.ConnectToEndpoint(ac.options.Endpoint, ac.options.Domain, nil)
-}
-
-func (ac *AdapterConnector) Register(component string, adapterID string, name string) error {
-
-	id := adapterID
-	if len(id) == 0 {
-		id = uuid.NewV1().String()
-	}
-
-	err := ac.register(component, id, name)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (ac *AdapterConnector) BatchPublish(requests []*Request) (bool, int32, error) {
-
-	request := &dsa.BatchPublishRequest{
-		Requests: make([]*dsa.PublishRequest, 0, len(requests)),
-	}
-
-	for _, req := range requests {
-		if req.IsCompleted {
-			continue
-		}
-
-		request.Requests = append(request.Requests, &dsa.PublishRequest{
-			EventName: req.EventName,
-			Payload:   req.Payload,
-		})
-	}
-
-	// Sned
-	reqMsg, _ := proto.Marshal(request)
-	respData, err := ac.request("dsa.batch", reqMsg, true)
-	if err != nil {
-		return false, 0, err
-	}
-
-	// Parse reply message
-	var reply dsa.BatchPublishReply
-	err = proto.Unmarshal(respData, &reply)
-	if err != nil {
-		return false, 0, err
-	}
-
-	if reply.Success {
-		return true, reply.SuccessCount, nil
-	}
-
-	return false, reply.SuccessCount, errors.New(reply.Reason)
-}
-
-func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[string]interface{}) error {
-
-	ac.buffer.Push(&Request{
+	msg := &Message{
 		EventName: eventName,
 		Payload:   payload,
-	})
-	/*
+	}
 
-		request := &dsa.PublishRequest{
+	data, _ := json.Marshal(msg)
+
+	// Prepare JetStream context
+	js, err := ac.client.GetJetStream()
+	if err != nil {
+		return nil, err
+	}
+
+	// Publish
+	subject := fmt.Sprintf(domainEvent, ac.options.Domain, eventName)
+
+	m := &nats.Msg{
+		Subject: subject,
+		Data:    data,
+	}
+
+	if meta != nil {
+		for k, v := range meta {
+			m.Header.Add(k, v)
+		}
+	}
+
+	return js.PublishMsg(m)
+
+	/*
+		ac.buffer.Push(&Request{
 			EventName: eventName,
 			Payload:   payload,
-		}
+		})
+	*/
+}
 
-		reqMsg, _ := proto.Marshal(request)
+func (ac *AdapterConnector) PublishAsync(eventName string, payload []byte, meta map[string]string) (nats.PubAckFuture, error) {
 
-		// Send
-		connection := ac.eventbus.GetConnection()
-		resp, err := connection.Request("gravity.dsa.incoming", reqMsg, time.Second*5)
+	msg := &Message{
+		EventName: eventName,
+		Payload:   payload,
+	}
+
+	data, _ := json.Marshal(msg)
+	/*
+		// Getting endpoint from client object
+		js, err := ac.client.GetJetStream()
 		if err != nil {
-			return err
-		}
-
-		// Parse reply message
-		var reply dsa.PublishReply
-		err = proto.Unmarshal(resp.Data, &reply)
-		if err != nil {
-			return err
-		}
-
-		if !reply.Success {
-			return errors.New(reply.Reason)
+			return nil, err
 		}
 	*/
-	return nil
+	// Publish
+	subject := fmt.Sprintf(domainEvent, ac.options.Domain, eventName)
+
+	m := &nats.Msg{
+		Subject: subject,
+		Data:    data,
+	}
+
+	if meta != nil {
+		for k, v := range meta {
+			m.Header.Add(k, v)
+		}
+	}
+
+	return ac.js.PublishMsgAsync(m)
+}
+
+func (ac *AdapterConnector) PublishAsyncComplete() <-chan struct{} {
+	return ac.js.PublishAsyncComplete()
 }

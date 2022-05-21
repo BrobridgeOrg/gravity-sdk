@@ -19,6 +19,7 @@ type EventBusHandler struct {
 
 type EventBus struct {
 	connection *nats.Conn
+	js         nats.JetStreamContext
 	host       string
 	handler    *EventBusHandler
 	options    *EventBusOptions
@@ -27,6 +28,7 @@ type EventBus struct {
 func NewEventBus(host string, handler EventBusHandler, options EventBusOptions) *EventBus {
 	return &EventBus{
 		connection: nil,
+		js:         nil,
 		host:       host,
 		handler:    &handler,
 		options:    &options,
@@ -36,6 +38,7 @@ func NewEventBus(host string, handler EventBusHandler, options EventBusOptions) 
 func (eb *EventBus) Connect() error {
 
 	nc, err := nats.Connect(eb.host,
+		nats.RetryOnFailedConnect(true),
 		nats.PingInterval(eb.options.PingInterval*time.Second),
 		nats.MaxPingsOutstanding(eb.options.MaxPingsOutstanding),
 		nats.MaxReconnects(eb.options.MaxReconnects),
@@ -59,4 +62,18 @@ func (eb *EventBus) ReconnectHandler(natsConn *nats.Conn) {
 
 func (eb *EventBus) GetConnection() *nats.Conn {
 	return eb.connection
+}
+
+func (eb *EventBus) GetJetStream() (nats.JetStreamContext, error) {
+
+	if eb.js == nil {
+		js, err := eb.connection.JetStream(nats.PublishAsyncMaxPending(1024000))
+		if err != nil {
+			return nil, err
+		}
+
+		eb.js = js
+	}
+
+	return eb.js, nil
 }

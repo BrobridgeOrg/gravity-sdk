@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option go_package = "github.com/BrobridgeOrg/gravity-sdk/types/product_event";
+
+package gravity.sdk.types.product_event;
+
+enum Method {
+  INSERT = 0;
+  UPDATE = 1;
+  DELETE = 2;
+  TRUNCATE = 3;
+}
+
+message ProductEvent {
+  string eventName = 1;
+  string table = 2;
+  Method method = 3;
+  repeated string primaryKeys = 4;
+  bytes primaryKey = 5;
+  bytes data = 6;
+}
