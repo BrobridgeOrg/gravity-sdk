@@ -59,8 +59,6 @@ func NewProductClient(client *core.Client, options *Options) *ProductClient {
 
 func (pc *ProductClient) CreateProduct(productSetting *ProductSetting) (*ProductSetting, error) {
 
-	nc := pc.client.GetConnection()
-
 	// Preparing request
 	req := &CreateProductRequest{
 		Setting: productSetting,
@@ -70,7 +68,7 @@ func (pc *ProductClient) CreateProduct(productSetting *ProductSetting) (*Product
 
 	// Send request
 	apiPath := fmt.Sprintf(ProductAPI+".CREATE", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
 		return nil, err
 	}
@@ -91,8 +89,6 @@ func (pc *ProductClient) CreateProduct(productSetting *ProductSetting) (*Product
 
 func (pc *ProductClient) DeleteProduct(name string) error {
 
-	nc := pc.client.GetConnection()
-
 	// Preparing request
 	req := &DeleteProductRequest{
 		Name: name,
@@ -102,7 +98,7 @@ func (pc *ProductClient) DeleteProduct(name string) error {
 
 	// Send request
 	apiPath := fmt.Sprintf(ProductAPI+".DELETE", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
 		return err
 	}
@@ -123,8 +119,6 @@ func (pc *ProductClient) DeleteProduct(name string) error {
 
 func (pc *ProductClient) UpdateProduct(name string, productSetting *ProductSetting) (*ProductSetting, error) {
 
-	nc := pc.client.GetConnection()
-
 	// Preparing request
 	req := &UpdateProductRequest{
 		Name:    name,
@@ -135,7 +129,7 @@ func (pc *ProductClient) UpdateProduct(name string, productSetting *ProductSetti
 
 	// Send request
 	apiPath := fmt.Sprintf(ProductAPI+".UPDATE", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
 		return nil, err
 	}
@@ -156,8 +150,6 @@ func (pc *ProductClient) UpdateProduct(name string, productSetting *ProductSetti
 
 func (pc *ProductClient) PurgeProduct(name string) error {
 
-	nc := pc.client.GetConnection()
-
 	// Preparing request
 	req := &PurgeProductRequest{
 		Name: name,
@@ -167,7 +159,7 @@ func (pc *ProductClient) PurgeProduct(name string) error {
 
 	// Send request
 	apiPath := fmt.Sprintf(ProductAPI+".PURGE", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
 		return err
 	}
@@ -188,8 +180,6 @@ func (pc *ProductClient) PurgeProduct(name string) error {
 
 func (pc *ProductClient) GetProduct(name string) (*ProductSetting, error) {
 
-	nc := pc.client.GetConnection()
-
 	// Preparing request
 	req := &InfoProductRequest{
 		Name: name,
@@ -199,7 +189,7 @@ func (pc *ProductClient) GetProduct(name string) (*ProductSetting, error) {
 
 	// Send request
 	apiPath := fmt.Sprintf(ProductAPI+".INFO", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
 		return nil, err
 	}
@@ -220,8 +210,6 @@ func (pc *ProductClient) GetProduct(name string) (*ProductSetting, error) {
 
 func (pc *ProductClient) ListProducts() ([]*ProductSetting, error) {
 
-	nc := pc.client.GetConnection()
-
 	products := make([]*ProductSetting, 0)
 
 	// Preparing request
@@ -232,11 +220,9 @@ func (pc *ProductClient) ListProducts() ([]*ProductSetting, error) {
 	// Send request
 	apiPath := fmt.Sprintf(ProductAPI+".LIST", pc.options.Domain)
 	reqMsg := nats.NewMsg(apiPath)
-	//reqMsg.Header.Add("Authent", "HA")
 	reqMsg.Data = reqData
 
-	msg, err := nc.RequestMsg(reqMsg, time.Second*30)
-	//	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.RequestMsg(reqMsg, time.Second*30)
 	if err != nil {
 		return products, err
 	}

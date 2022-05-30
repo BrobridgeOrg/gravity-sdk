@@ -65,3 +65,20 @@ func (client *Client) GetConnection() *nats.Conn {
 func (client *Client) GetJetStream() (nats.JetStreamContext, error) {
 	return client.eventbus.GetJetStream()
 }
+
+func (client *Client) Request(apiPath string, payload []byte, timeout time.Duration) (*nats.Msg, error) {
+
+	msg := nats.NewMsg(apiPath)
+	msg.Data = payload
+
+	return client.RequestMsg(msg, timeout)
+}
+
+func (client *Client) RequestMsg(msg *nats.Msg, timeout time.Duration) (*nats.Msg, error) {
+
+	if len(client.options.Token) > 0 {
+		msg.Header.Add("Authorization", client.options.Token)
+	}
+
+	return client.GetConnection().RequestMsg(msg, timeout)
+}

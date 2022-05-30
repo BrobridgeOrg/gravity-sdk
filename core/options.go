@@ -3,6 +3,7 @@ package core
 import "time"
 
 type Options struct {
+	Token               string
 	PingInterval        time.Duration
 	MaxPingsOutstanding int
 	MaxReconnects       int

@@ -58,3 +58,11 @@ type PurgeProductRequest struct {
 type PurgeProductReply struct {
 	core.ErrorReply
 }
+
+type PrepareSubscriptionRequest struct {
+	Product string `json:"product"`
+}
+
+type PrepareSubscriptionReply struct {
+	core.ErrorReply
+}

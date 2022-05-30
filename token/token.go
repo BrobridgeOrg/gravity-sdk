@@ -54,8 +54,6 @@ func NewTokenClient(client *core.Client, options *Options) *TokenClient {
 
 func (pc *TokenClient) ListAvailablePermissions() (map[string]string, error) {
 
-	nc := pc.client.GetConnection()
-
 	// Preparing request
 	req := &ListAvailablePermissionsRequest{}
 
@@ -63,7 +61,7 @@ func (pc *TokenClient) ListAvailablePermissions() (map[string]string, error) {
 
 	// Send request
 	apiPath := fmt.Sprintf(TokenAPI+".LIST_AVAILABLE_PERMISSIONS", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +82,6 @@ func (pc *TokenClient) ListAvailablePermissions() (map[string]string, error) {
 
 func (pc *TokenClient) CreateToken(tokenID string, productSetting *TokenSetting) (string, *TokenSetting, error) {
 
-	nc := pc.client.GetConnection()
-
 	// Preparing request
 	req := &CreateTokenRequest{
 		TokenID: tokenID,
@@ -96,7 +92,7 @@ func (pc *TokenClient) CreateToken(tokenID string, productSetting *TokenSetting)
 
 	// Send request
 	apiPath := fmt.Sprintf(TokenAPI+".CREATE", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
 		return "", nil, err
 	}
@@ -117,8 +113,6 @@ func (pc *TokenClient) CreateToken(tokenID string, productSetting *TokenSetting)
 
 func (pc *TokenClient) DeleteToken(tokenID string) error {
 
-	nc := pc.client.GetConnection()
-
 	// Preparing request
 	req := &DeleteTokenRequest{
 		TokenID: tokenID,
@@ -128,7 +122,7 @@ func (pc *TokenClient) DeleteToken(tokenID string) error {
 
 	// Send request
 	apiPath := fmt.Sprintf(TokenAPI+".DELETE", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
 		return err
 	}
@@ -149,8 +143,6 @@ func (pc *TokenClient) DeleteToken(tokenID string) error {
 
 func (pc *TokenClient) UpdateToken(tokenID string, productSetting *TokenSetting) (*TokenSetting, error) {
 
-	nc := pc.client.GetConnection()
-
 	// Preparing request
 	req := &UpdateTokenRequest{
 		TokenID: tokenID,
@@ -161,7 +153,7 @@ func (pc *TokenClient) UpdateToken(tokenID string, productSetting *TokenSetting)
 
 	// Send request
 	apiPath := fmt.Sprintf(TokenAPI+".UPDATE", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
 		return nil, err
 	}
@@ -180,9 +172,7 @@ func (pc *TokenClient) UpdateToken(tokenID string, productSetting *TokenSetting)
 	return resp.Setting, nil
 }
 
-func (pc *TokenClient) GetToken(tokenID string) (*TokenSetting, error) {
-
-	nc := pc.client.GetConnection()
+func (pc *TokenClient) GetToken(tokenID string) (string, *TokenSetting, error) {
 
 	// Preparing request
 	req := &InfoTokenRequest{
@@ -193,28 +183,26 @@ func (pc *TokenClient) GetToken(tokenID string) (*TokenSetting, error) {
 
 	// Send request
 	apiPath := fmt.Sprintf(TokenAPI+".INFO", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	// Parsing response
 	resp := &InfoTokenReply{}
 	err = json.Unmarshal(msg.Data, resp)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	if resp.Error != nil {
-		return nil, errors.New(resp.Error.Message)
+		return "", nil, errors.New(resp.Error.Message)
 	}
 
-	return resp.Setting, nil
+	return resp.Token, resp.Setting, nil
 }
 
 func (pc *TokenClient) ListTokens() ([]*TokenSetting, error) {
-
-	nc := pc.client.GetConnection()
 
 	products := make([]*TokenSetting, 0)
 
@@ -225,7 +213,7 @@ func (pc *TokenClient) ListTokens() ([]*TokenSetting, error) {
 
 	// Send request
 	apiPath := fmt.Sprintf(TokenAPI+".LIST", pc.options.Domain)
-	msg, err := nc.Request(apiPath, reqData, time.Second*30)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
 	if err != nil {
 		return products, err
 	}

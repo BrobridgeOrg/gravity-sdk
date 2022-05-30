@@ -25,7 +25,7 @@ type ListTokensReply struct {
 }
 
 type CreateTokenRequest struct {
-	TokenID string        `json:"token"`
+	TokenID string        `json:"tokenID"`
 	Setting *TokenSetting `json:"setting"`
 }
 
@@ -46,7 +46,7 @@ type UpdateTokenReply struct {
 }
 
 type DeleteTokenRequest struct {
-	TokenID string `json:"token"`
+	TokenID string `json:"tokenID"`
 }
 
 type DeleteTokenReply struct {
@@ -59,5 +59,6 @@ type InfoTokenRequest struct {
 
 type InfoTokenReply struct {
 	core.ErrorReply
+	Token   string        `json:"token"`
 	Setting *TokenSetting `json:"setting"`
 }
