@@ -43,6 +43,7 @@ type ConfigStore struct {
 	client       *core.Client
 	domain       string
 	catalog      string
+	ttl          time.Duration
 	watcher      nats.KeyWatcher
 	eventHandler func(*ConfigEntry)
 	kv           nats.KeyValue
@@ -73,6 +74,12 @@ func WithCatalog(catalog string) func(*ConfigStore) {
 	}
 }
 
+func WithTTL(ttl time.Duration) func(*ConfigStore) {
+	return func(cs *ConfigStore) {
+		cs.ttl = ttl
+	}
+}
+
 func WithEventHandler(fn func(*ConfigEntry)) func(*ConfigStore) {
 	return func(cs *ConfigStore) {
 		cs.eventHandler = fn
@@ -93,6 +100,7 @@ func (cs *ConfigStore) Init() error {
 	kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
 		Bucket:      bucket,
 		Description: "Gravity configuration store",
+		TTL:         cs.ttl,
 	})
 	if err != nil {
 		return err
