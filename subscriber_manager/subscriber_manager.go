@@ -88,6 +88,7 @@ func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 			AccessKey:   sub.AccessKey,
 			Permissions: sub.Permissions,
 			Collections: sub.Collections,
+			Pipelines:   sub.Pipelines,
 		}
 	}
 

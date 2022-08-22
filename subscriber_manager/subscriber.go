@@ -16,4 +16,5 @@ type Subscriber struct {
 	AccessKey   string
 	Permissions []string
 	Collections []string
+	Pipelines   []uint64
 }
