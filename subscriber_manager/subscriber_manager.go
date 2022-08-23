@@ -95,6 +95,32 @@ func (sm *SubscriberManager) GetSubscribers() ([]*Subscriber, error) {
 	return subscribers, nil
 }
 
+func (sm *SubscriberManager) UpdateSubscriberPipelines(subscriberID string, pipelines []uint64) error {
+
+	request := subscriber_manager_pb.UpdateSubscriberPropsRequest{
+		SubscriberID: subscriberID,
+		Pipelines:    pipelines,
+	}
+	msg, _ := proto.Marshal(&request)
+
+	respData, err := sm.request("subscriber_manager.updateSubscriberProps", msg, true)
+	if err != nil {
+		return err
+	}
+
+	var reply subscriber_manager_pb.UpdateSubscriberPropsReply
+	err = proto.Unmarshal(respData, &reply)
+	if err != nil {
+		return err
+	}
+
+	if !reply.Success {
+		return errors.New(reply.Reason)
+	}
+
+	return nil
+}
+
 func (sm *SubscriberManager) SubscribeToCollections(subscriberID string, collections []string) error {
 
 	request := subscriber_manager_pb.SubscribeToCollectionsRequest{
