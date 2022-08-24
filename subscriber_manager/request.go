@@ -65,7 +65,7 @@ func (sm *SubscriberManager) request(method string, data []byte, encrypted bool)
 	if encrypted {
 		data, err = key.Encryption().Decrypt(packet.Payload)
 		if err != nil {
-			return []byte(""), errors.New("Forbidden")
+			return []byte(""), err
 		}
 
 		return data, nil

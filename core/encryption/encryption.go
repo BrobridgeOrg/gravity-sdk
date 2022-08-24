@@ -6,7 +6,12 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"io"
+)
+
+var (
+	ErrInvalidPacket = errors.New("encryption: invalid packet")
 )
 
 var tokenPayload = []byte("Brobridge")
@@ -90,6 +95,9 @@ func (encryption *Encryption) Decrypt(data []byte) ([]byte, error) {
 	}
 
 	nonceSize := aesGCM.NonceSize()
+	if len(data) < nonceSize {
+		return nil, ErrInvalidPacket
+	}
 
 	//Extract the nonce from the encrypted data
 	nonce, ciphertext := data[:nonceSize], data[nonceSize:]

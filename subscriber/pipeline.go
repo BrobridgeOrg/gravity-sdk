@@ -10,6 +10,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var (
+	ErrUnknownEventType = errors.New("pipeline: unknown event type")
+)
+
 type PipelineStatus int32
 
 const (
@@ -387,6 +391,14 @@ func (pipeline *Pipeline) dispatchMessages(msgType MessageType, privData interfa
 
 			msg.Payload = dataEvent
 			msg.Callback = pipeline.eventEventCallback
+
+		default:
+
+			log.WithFields(logrus.Fields{
+				"pipeline": pipeline.id,
+			}).Warnf("pipeline: unknown event type: %d", msg.Type)
+
+			return ErrUnknownEventType
 		}
 
 		pipeline.subscriber.subscription.Push(msg)

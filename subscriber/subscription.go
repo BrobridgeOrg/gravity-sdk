@@ -76,6 +76,12 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 func (s *Subscription) start() {
 	go func() {
 		for msg := range s.buffer.Output() {
+
+			// Skip
+			if msg == nil {
+				continue
+			}
+
 			s.handle(msg.(*Message))
 		}
 	}()
@@ -95,6 +101,7 @@ func (s *Subscription) prepare(data interface{}, done func(interface{})) {
 		err := gravity_sdk_types_snapshot_record.Unmarshal(event.RawData, snapshotRecord)
 		if err != nil {
 			log.Error(err)
+			done(nil)
 			return
 		}
 
@@ -110,6 +117,7 @@ func (s *Subscription) prepare(data interface{}, done func(interface{})) {
 			log.WithFields(logrus.Fields{
 				"pipeline": event.PipelineID,
 			}).Errorf("pipeline event - %v", err)
+			done(nil)
 			return
 		}
 
@@ -121,6 +129,7 @@ func (s *Subscription) prepare(data interface{}, done func(interface{})) {
 			log.WithFields(logrus.Fields{
 				"pipeline": event.PipelineID,
 			}).Error(err)
+			done(nil)
 			return
 		}
 
@@ -128,6 +137,10 @@ func (s *Subscription) prepare(data interface{}, done func(interface{})) {
 		event.Payload = record
 
 		pipelineEventPool.Put(pe)
+	default:
+		log.Warnf("subscription: unknown event type: %d", msg.Type)
+		done(nil)
+		return
 	}
 
 	done(msg)
