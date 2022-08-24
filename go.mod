@@ -12,7 +12,7 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/jinzhu/copier v0.3.2 // indirect
 	github.com/json-iterator/go v1.1.10
-	github.com/nats-io/nats.go v1.11.0
+	github.com/nats-io/nats.go v1.16.0
 	github.com/prometheus/common v0.4.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.8.1
