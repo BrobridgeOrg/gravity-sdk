@@ -478,16 +478,13 @@ func prepareValue(value *Value) interface{} {
 	case DataType_ARRAY:
 
 		arrayFields := value.Array.Elements
-		payload := make([]interface{}, len(arrayFields))
+		payload := make([]interface{}, 0, len(arrayFields))
 
 		for _, arrayField := range arrayFields {
 			payload = append(payload, prepareValue(arrayField))
 		}
 
 		return payload
-
-	default:
-		return GetValue(value)
 	}
 
 	return GetValue(value)

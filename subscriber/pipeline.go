@@ -343,6 +343,7 @@ func (pipeline *Pipeline) awake() error {
 
 func (pipeline *Pipeline) snapshotEventCallback(msg *Message) {
 	event := msg.Payload.(*SnapshotEvent)
+	msg.Payload = nil
 	snapshotEventPool.Put(event)
 }
 
@@ -350,6 +351,7 @@ func (pipeline *Pipeline) eventEventCallback(msg *Message) {
 
 	// Update sequence number to state store
 	event := msg.Payload.(*DataEvent)
+	msg.Payload = nil
 	err := pipeline.SetUpdatedSequence(event.Sequence)
 	if err != nil {
 		log.Errorf("Failed to write sequence to state store: %v", err)
