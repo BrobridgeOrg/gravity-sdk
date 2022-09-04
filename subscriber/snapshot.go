@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	pipeline_pb "github.com/BrobridgeOrg/gravity-api/service/pipeline"
-	"github.com/golang/protobuf/proto"
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -17,6 +16,8 @@ var pullSnapshotPool = sync.Pool{
 	},
 }
 
+type SnapshotOpt func(*Snapshot)
+
 type CollectionSnapshot struct {
 	name        string
 	lastKey     []byte
@@ -24,31 +25,64 @@ type CollectionSnapshot struct {
 }
 
 type Snapshot struct {
-	snapshotID  string
-	subscriber  *Subscriber
-	pipeline    *Pipeline
-	isReady     bool
-	isCompleted bool
-	collections sync.Map
+	snapshotID   string
+	pipelineID   uint64
+	subscriberID string
+	isReady      bool
+	isCompleted  bool
+	collections  sync.Map
+	request      SnapshotRequest
+	chunkSize    int
 }
 
-func NewSnapshot(pipeline *Pipeline) *Snapshot {
+func NewSnapshot(opts ...SnapshotOpt) *Snapshot {
 	snapshot := &Snapshot{
 		snapshotID: uuid.NewV1().String(),
-		subscriber: pipeline.subscriber,
-		pipeline:   pipeline,
 	}
 
-	// Initializing collection snapshot states
-	for collectionName, _ := range pipeline.subscriber.collectionMap {
-		snapshot.collections.Store(collectionName, &CollectionSnapshot{
-			name:        collectionName,
-			lastKey:     []byte(""),
-			isCompleted: false,
-		})
+	for _, opt := range opts {
+		opt(snapshot)
 	}
 
 	return snapshot
+}
+
+func WithSnapshotPipelineID(id uint64) SnapshotOpt {
+	return func(s *Snapshot) {
+		s.pipelineID = id
+	}
+}
+
+func WithSnapshotSubscriberID(id string) SnapshotOpt {
+	return func(s *Snapshot) {
+		s.subscriberID = id
+	}
+}
+
+func WithSnapshotCollections(cols []string) SnapshotOpt {
+	return func(s *Snapshot) {
+
+		// Initializing collection snapshot states
+		for _, collectionName := range cols {
+			s.collections.Store(collectionName, &CollectionSnapshot{
+				name:        collectionName,
+				lastKey:     []byte(""),
+				isCompleted: false,
+			})
+		}
+	}
+}
+
+func WithSnapshotRequest(sr SnapshotRequest) SnapshotOpt {
+	return func(s *Snapshot) {
+		s.request = sr
+	}
+}
+
+func WithSnapshotChunkSize(size int) SnapshotOpt {
+	return func(s *Snapshot) {
+		s.chunkSize = size
+	}
 }
 
 func (snapshot *Snapshot) getLastPosition() *CollectionSnapshot {
@@ -80,46 +114,37 @@ func (snapshot *Snapshot) pull(collection string, lastKey []byte) ([][]byte, err
 
 	collectionSnapshot := v.(*CollectionSnapshot)
 
-	// Fetch events from pipelines
-	channel := fmt.Sprintf("pipeline.%d.pullSnapshot", snapshot.pipeline.id)
-	request := pipeline_pb.PullSnapshotRequest{
-		SnapshotID:   snapshot.snapshotID,
-		SubscriberID: snapshot.subscriber.id,
-		Collection:   collection,
-		Key:          lastKey,
-		Offset:       1,
-		Count:        int64(snapshot.subscriber.options.ChunkSize),
-	}
-
-	if len(lastKey) == 0 {
-		request.Offset = 0
-	}
-
 	log.WithFields(logrus.Fields{
-		"pipeline":   snapshot.pipeline.id,
-		"snapshot":   snapshot.snapshotID,
-		"collection": request.Collection,
+		"pipeline":   snapshot.pipelineID,
+		"snapshot":   snapshot.subscriberID,
+		"collection": collection,
 	}).Info("Pulling from snapshot")
 
-	msg, _ := proto.Marshal(&request)
-
-	// Request
-	respData, err := snapshot.subscriber.request(channel, msg, true)
-	if err != nil {
-		return nil, err
+	offset := uint64(1)
+	if len(lastKey) == 0 {
+		offset = 0
 	}
 
-	reply := pullSnapshotPool.Get().(*pipeline_pb.PullSnapshotReply)
-	defer pullSnapshotPool.Put(reply)
-
-	err = proto.Unmarshal(respData, reply)
+	reply, err := snapshot.request.Pull(
+		snapshot.snapshotID,
+		snapshot.subscriberID,
+		snapshot.pipelineID,
+		collection,
+		lastKey,
+		offset,
+		int64(snapshot.chunkSize),
+	)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"pipeline": snapshot.pipelineID,
+			"snapshot": snapshot.snapshotID,
+		}).Error(err)
 		return nil, err
 	}
 
 	if !reply.Success {
 		log.WithFields(logrus.Fields{
-			"pipeline": snapshot.pipeline.id,
+			"pipeline": snapshot.pipelineID,
 			"snapshot": snapshot.snapshotID,
 		}).Error(reply.Reason)
 		return nil, err
@@ -128,9 +153,9 @@ func (snapshot *Snapshot) pull(collection string, lastKey []byte) ([][]byte, err
 	// No more records for this collection
 	if len(reply.Records) == 0 {
 		log.WithFields(logrus.Fields{
-			"pipeline":   snapshot.pipeline.id,
+			"pipeline":   snapshot.pipelineID,
 			"snapshot":   snapshot.snapshotID,
-			"collection": request.Collection,
+			"collection": collection,
 		}).Info("Snapshot - No records")
 
 		collectionSnapshot.isCompleted = true
@@ -146,22 +171,12 @@ func (snapshot *Snapshot) pull(collection string, lastKey []byte) ([][]byte, err
 
 func (snapshot *Snapshot) Create() error {
 
-	// Fetch events from pipelines
-	channel := fmt.Sprintf("pipeline.%d.createSnapshot", snapshot.pipeline.id)
-	request := pipeline_pb.CreateSnapshotRequest{
-		SnapshotID: snapshot.snapshotID,
-	}
-
-	msg, _ := proto.Marshal(&request)
-
-	respData, err := snapshot.subscriber.request(channel, msg, true)
+	reply, err := snapshot.request.Create(snapshot.snapshotID, snapshot.pipelineID)
 	if err != nil {
-		return err
-	}
-
-	var reply pipeline_pb.CreateSnapshotReply
-	err = proto.Unmarshal(respData, &reply)
-	if err != nil {
+		log.WithFields(logrus.Fields{
+			"pipeline": snapshot.pipelineID,
+			"snapshot": snapshot.snapshotID,
+		}).Error(err)
 		return err
 	}
 
@@ -178,32 +193,22 @@ func (snapshot *Snapshot) Create() error {
 func (snapshot *Snapshot) Close() error {
 
 	log.WithFields(logrus.Fields{
-		"pipeline": snapshot.pipeline.id,
+		"pipeline": snapshot.pipelineID,
 		"snapshot": snapshot.snapshotID,
 	}).Info("Closing snapshot")
 
-	// Fetch events from pipelines
-	channel := fmt.Sprintf("pipeline.%d.releaseSnapshot", snapshot.pipeline.id)
-	request := pipeline_pb.ReleaseSnapshotRequest{
-		SnapshotID: snapshot.snapshotID,
-	}
-
-	msg, _ := proto.Marshal(&request)
-
-	respData, err := snapshot.subscriber.request(channel, msg, true)
+	reply, err := snapshot.request.Close(snapshot.snapshotID, snapshot.pipelineID)
 	if err != nil {
-		return err
-	}
-
-	var reply pipeline_pb.ReleaseSnapshotReply
-	err = proto.Unmarshal(respData, &reply)
-	if err != nil {
+		log.WithFields(logrus.Fields{
+			"pipeline": snapshot.pipelineID,
+			"snapshot": snapshot.snapshotID,
+		}).Error(err)
 		return err
 	}
 
 	if !reply.Success {
 		log.WithFields(logrus.Fields{
-			"pipeline": snapshot.pipeline.id,
+			"pipeline": snapshot.pipelineID,
 			"snapshot": snapshot.snapshotID,
 		}).Error(reply.Reason)
 		return err

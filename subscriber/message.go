@@ -19,13 +19,13 @@ const (
 
 type Message struct {
 	Pipeline     *Pipeline
-	Subscription *Subscription
+	Subscription Subscription
 	Type         MessageType
 	Payload      interface{}
 	Callback     func(*Message)
 }
 
-func NewMessage(pipeline *Pipeline, sub *Subscription, msgType MessageType, payload interface{}) *Message {
+func NewMessage(pipeline *Pipeline, sub Subscription, msgType MessageType, payload interface{}) *Message {
 	return &Message{
 		Pipeline:     pipeline,
 		Subscription: sub,
@@ -40,5 +40,6 @@ func (msg *Message) Ack() {
 		msg.Callback(msg)
 	}
 
+	msg.Payload = nil
 	messagePool.Put(msg)
 }

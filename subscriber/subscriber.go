@@ -1,10 +1,12 @@
 package subscriber
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
 
+	pipeline_pb "github.com/BrobridgeOrg/gravity-api/service/pipeline"
 	subscriber_manager_pb "github.com/BrobridgeOrg/gravity-api/service/subscriber_manager"
 	core "github.com/BrobridgeOrg/gravity-sdk/core"
 	"github.com/BrobridgeOrg/gravity-sdk/pipeline_manager"
@@ -31,9 +33,13 @@ type Subscriber struct {
 	id            string
 	pipelines     map[uint64]*Pipeline
 	collectionMap map[string][]string
-	subscription  *Subscription
+	subscription  Subscription
 	eventHandler  *EventHandler
 	runner        *Runner
+
+	sub                *nats.Subscription
+	msgEventHandler    MessageHandler
+	msgSnapshotHandler MessageHandler
 }
 
 func NewSubscriber(options *Options) *Subscriber {
@@ -50,9 +56,21 @@ func NewSubscriber(options *Options) *Subscriber {
 		pipelines:     make(map[uint64]*Pipeline),
 		collectionMap: make(map[string][]string),
 		runner:        NewRunner(),
+		msgEventHandler: func(msg *Message) {
+			msg.Ack()
+		},
+		msgSnapshotHandler: func(msg *Message) {
+			msg.Ack()
+		},
 	}
 
-	subscriber.subscription = NewSubscription(subscriber, options.BufferSize)
+	subscriber.subscription = NewSubscriptionImpl(
+		WithSubscriptionBufferSize(options.BufferSize),
+		WithSubscriptionWorkerCount(options.WorkerCount),
+		WithSubscriptionEventHandler(subscriber.handleEvent),
+		WithSubscriptionSnapshotHandler(subscriber.handleSnapshot),
+	)
+
 	subscriber.eventHandler = NewEventHandler(subscriber)
 
 	return subscriber
@@ -137,6 +155,88 @@ func (sub *Subscriber) healthCheck() error {
 	return nil
 }
 
+func (sub *Subscriber) getStateFromServer(pipelineID uint64) (*pipeline_pb.GetStateReply, error) {
+
+	log.WithFields(logrus.Fields{
+		"pipeline": pipelineID,
+	}).Info("Getting pipeline states from server")
+
+	// Fetch events from pipelines
+	channel := fmt.Sprintf("pipeline.%d.getState", pipelineID)
+	request := pipeline_pb.GetStateRequest{}
+
+	msg, _ := proto.Marshal(&request)
+
+	respData, err := sub.request(channel, msg, true)
+	if err != nil {
+		return nil, err
+	}
+
+	var reply pipeline_pb.GetStateReply
+	err = proto.Unmarshal(respData, &reply)
+	if err != nil {
+		return nil, errors.New("Forbidden")
+	}
+
+	if !reply.Success {
+		log.WithFields(logrus.Fields{
+			"pipeline": pipelineID,
+		}).Error(reply.Reason)
+		return nil, errors.New(reply.Reason)
+	}
+
+	log.WithFields(logrus.Fields{
+		"pipeline": pipelineID,
+		"lastSeq":  reply.LastSeq,
+	}).Info("latest pipeline states from server")
+
+	return &reply, nil
+}
+
+func (sub *Subscriber) getCollections() []string {
+
+	cols := make([]string, 0, len(sub.collectionMap))
+	for col, _ := range sub.collectionMap {
+		cols = append(cols, col)
+	}
+
+	return cols
+}
+
+func (sub *Subscriber) createPipeline(id uint64, lastSeq uint64) error {
+
+	log.WithFields(logrus.Fields{
+		"id": id,
+	}).Info("Creating pipeline")
+
+	// Getting pipeline states
+	state, err := sub.getStateFromServer(id)
+	if err != nil {
+		return err
+	}
+
+	p := NewPipeline(
+		id,
+		lastSeq,
+		WithPipelineSubscriberID(sub.id),
+		WithPipelineChunkSize(sub.options.ChunkSize),
+		WithPipelineInitialLoad(sub.options.InitialLoad.Enabled, sub.options.InitialLoad.Mode, sub.options.InitialLoad.OmittedCount),
+		WithPipelineRemoteLastSeq(state.LastSeq),
+		WithPipelineSnapshotLastSeq(state.SnapshotLastSeq),
+		WithPipelineRequest(NewPipelineRequestImpl(sub.request)),
+		WithPipelineSnapshotRequest(NewSnapshotRequestImpl(sub.request)),
+		WithPipelineStateStore(sub.options.StateStore),
+		WithPipelineSubscription(sub.subscription),
+		WithPipelineCollections(sub.getCollections()),
+	)
+	err = sub.AddPipeline(p)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (sub *Subscriber) Connect(host string, options *core.Options) error {
 	sub.client = core.NewClient()
 	return sub.client.Connect(host, options)
@@ -196,8 +296,8 @@ func (sub *Subscriber) Register(subscriberType subscriber_manager_pb.SubscriberT
 		return err
 	}
 
-	sub.subscription.sub = s
-	sub.subscription.start()
+	sub.sub = s
+	sub.subscription.Start()
 
 	return nil
 }
@@ -225,12 +325,24 @@ func (sub *Subscriber) Start() {
 	}()
 }
 
+func (sub *Subscriber) handleEvent(msg *Message) {
+	if sub.msgEventHandler != nil {
+		sub.msgEventHandler(msg)
+	}
+}
+
 func (sub *Subscriber) SetEventHandler(cb MessageHandler) {
-	sub.subscription.eventHandler = cb
+	sub.msgEventHandler = cb
+}
+
+func (sub *Subscriber) handleSnapshot(msg *Message) {
+	if sub.msgSnapshotHandler != nil {
+		sub.msgSnapshotHandler(msg)
+	}
 }
 
 func (sub *Subscriber) SetSnapshotHandler(cb MessageHandler) {
-	sub.subscription.snapshotHandler = cb
+	sub.msgSnapshotHandler = cb
 }
 
 func (sub *Subscriber) GetPipelineCount() (uint64, error) {
@@ -259,8 +371,7 @@ func (sub *Subscriber) SubscribeToPipelines(pipelines []uint64) error {
 
 		// Subscribe to all pipelines
 		for i := uint64(0); i < count; i++ {
-			pipeline := NewPipeline(sub, i, 0)
-			err := sub.AddPipeline(pipeline)
+			err := sub.createPipeline(i, 0)
 			if err != nil {
 				return err
 			}
@@ -277,8 +388,7 @@ func (sub *Subscriber) SubscribeToPipelines(pipelines []uint64) error {
 	}
 
 	for _, pipelineID := range pipelines {
-		pipeline := NewPipeline(sub, pipelineID, 0)
-		err := sub.AddPipeline(pipeline)
+		err := sub.createPipeline(pipelineID, 0)
 		if err != nil {
 			return err
 		}

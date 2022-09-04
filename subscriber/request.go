@@ -9,6 +9,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type RequestHandler func(method string, data []byte, encrypted bool) ([]byte, error)
+
 func (sub *Subscriber) request(method string, data []byte, encrypted bool) ([]byte, error) {
 
 	// Getting endpoint from client object

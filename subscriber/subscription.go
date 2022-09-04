@@ -6,10 +6,8 @@ import (
 	gravity_sdk_types_pipeline_event "github.com/BrobridgeOrg/gravity-sdk/types/pipeline_event"
 	gravity_sdk_types_record "github.com/BrobridgeOrg/gravity-sdk/types/record"
 
-	//	gravity_sdk_types_projection "github.com/BrobridgeOrg/gravity-sdk/types/projection"
 	gravity_sdk_types_snapshot_record "github.com/BrobridgeOrg/gravity-sdk/types/snapshot_record"
 	sdf "github.com/BrobridgeOrg/sequential-data-flow"
-	nats "github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,41 +29,37 @@ var recordPool = sync.Pool{
 	},
 }
 
-/*
-var projectionPool = sync.Pool{
-	New: func() interface{} {
-		return &gravity_sdk_types_projection.Projection{}
-	},
+type SubscriptionOpt func(s *SubscriptionImpl)
+
+type Subscription interface {
+	Start()
+	Push(msg *Message)
+	Unsubscribe() error
 }
-*/
-type Subscription struct {
-	subscriber      *Subscriber
-	sub             *nats.Subscription
+
+type SubscriptionImpl struct {
 	buffer          *sdf.Flow
+	bufferSize      int
+	workerCount     int
 	eventHandler    MessageHandler
 	snapshotHandler MessageHandler
 }
 
-func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
+func NewSubscriptionImpl(opts ...SubscriptionOpt) *SubscriptionImpl {
 
-	subscription := &Subscription{
-		subscriber: subscriber,
-		eventHandler: func(msg *Message) {
-			event := msg.Payload.(*DataEvent)
-			msg.Ack()
-			dataEventPool.Put(event)
-		},
-		snapshotHandler: func(msg *Message) {
-			event := msg.Payload.(*SnapshotEvent)
-			msg.Ack()
-			snapshotEventPool.Put(event)
-		},
+	subscription := &SubscriptionImpl{
+		bufferSize:  10240,
+		workerCount: 4,
+	}
+
+	for _, opt := range opts {
+		opt(subscription)
 	}
 
 	// Initializing sequential data flow
 	options := sdf.NewOptions()
 	options.BufferSize = 10240
-	options.WorkerCount = subscription.subscriber.options.WorkerCount
+	options.WorkerCount = subscription.workerCount
 	options.Handler = subscription.prepare
 
 	subscription.buffer = sdf.NewFlow(options)
@@ -73,7 +67,31 @@ func NewSubscription(subscriber *Subscriber, bufferSize int) *Subscription {
 	return subscription
 }
 
-func (s *Subscription) start() {
+func WithSubscriptionBufferSize(size int) SubscriptionOpt {
+	return func(s *SubscriptionImpl) {
+		s.bufferSize = size
+	}
+}
+
+func WithSubscriptionWorkerCount(count int) SubscriptionOpt {
+	return func(s *SubscriptionImpl) {
+		s.workerCount = count
+	}
+}
+
+func WithSubscriptionEventHandler(fn MessageHandler) SubscriptionOpt {
+	return func(s *SubscriptionImpl) {
+		s.eventHandler = fn
+	}
+}
+
+func WithSubscriptionSnapshotHandler(fn MessageHandler) SubscriptionOpt {
+	return func(s *SubscriptionImpl) {
+		s.snapshotHandler = fn
+	}
+}
+
+func (s *SubscriptionImpl) Start() {
 	go func() {
 		for msg := range s.buffer.Output() {
 
@@ -87,7 +105,7 @@ func (s *Subscription) start() {
 	}()
 }
 
-func (s *Subscription) prepare(data interface{}, done func(interface{})) {
+func (s *SubscriptionImpl) prepare(data interface{}, done func(interface{})) {
 
 	msg := data.(*Message)
 
@@ -123,8 +141,6 @@ func (s *Subscription) prepare(data interface{}, done func(interface{})) {
 
 		record := recordPool.Get().(*gravity_sdk_types_record.Record)
 		err = gravity_sdk_types_record.Unmarshal(pe.Payload, record)
-		//		pj := projectionPool.Get().(*gravity_sdk_types_projection.Projection)
-		//		err = gravity_sdk_types_projection.Unmarshal(pe.Payload, pj)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"pipeline": event.PipelineID,
@@ -146,7 +162,7 @@ func (s *Subscription) prepare(data interface{}, done func(interface{})) {
 	done(msg)
 }
 
-func (s *Subscription) handle(msg *Message) {
+func (s *SubscriptionImpl) handle(msg *Message) {
 
 	switch msg.Type {
 	case MESSAGE_TYPE_EVENT:
@@ -156,11 +172,11 @@ func (s *Subscription) handle(msg *Message) {
 	}
 }
 
-func (s *Subscription) Push(msg *Message) {
+func (s *SubscriptionImpl) Push(msg *Message) {
 	s.buffer.Push(msg)
 }
 
-func (s *Subscription) Unsubscribe() error {
+func (s *SubscriptionImpl) Unsubscribe() error {
 	s.buffer.Close()
-	return s.sub.Unsubscribe()
+	return nil
 }
