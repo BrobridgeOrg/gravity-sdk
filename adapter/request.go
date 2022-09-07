@@ -8,6 +8,10 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
+var (
+	ErrInvalidPacket = errors.New("adapter: invalid packet")
+)
+
 type Request struct {
 	IsCompleted bool
 	Key         []byte

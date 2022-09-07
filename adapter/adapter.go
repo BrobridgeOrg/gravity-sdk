@@ -202,37 +202,59 @@ func (ac *AdapterConnector) BatchPublish(requests []*Request) (bool, int32, erro
 }
 
 func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[string]interface{}) error {
-
-	ac.buffer.Push(&Request{
-		EventName: eventName,
-		Payload:   payload,
-	})
 	/*
-
-		request := &dsa.PublishRequest{
+		ac.buffer.Push(&Request{
 			EventName: eventName,
 			Payload:   payload,
-		}
-
-		reqMsg, _ := proto.Marshal(request)
-
-		// Send
-		connection := ac.eventbus.GetConnection()
-		resp, err := connection.Request("gravity.dsa.incoming", reqMsg, time.Second*5)
-		if err != nil {
-			return err
-		}
-
-		// Parse reply message
-		var reply dsa.PublishReply
-		err = proto.Unmarshal(resp.Data, &reply)
-		if err != nil {
-			return err
-		}
-
-		if !reply.Success {
-			return errors.New(reply.Reason)
-		}
+		})
 	*/
+
+	// Getting endpoint from client object
+	endpoint, err := ac.GetEndpoint()
+	if err != nil {
+		return err
+	}
+
+	js, _ := endpoint.GetConnection().JetStream()
+
+	request := &dsa.PublishRequest{
+		EventName: eventName,
+		Payload:   payload,
+	}
+
+	reqData, _ := proto.Marshal(request)
+
+	// Send
+	_, err = js.PublishAsync(endpoint.Channel("dsa.event"), reqData)
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (ac *AdapterConnector) PublishComplete() <-chan struct{} {
+
+	// Getting endpoint from client object
+	endpoint, err := ac.GetEndpoint()
+	if err != nil {
+		return nil
+	}
+
+	js, _ := endpoint.GetConnection().JetStream()
+
+	return js.PublishAsyncComplete()
+}
+
+func (ac *AdapterConnector) PublishPending() int {
+
+	// Getting endpoint from client object
+	endpoint, err := ac.GetEndpoint()
+	if err != nil {
+		return 0
+	}
+
+	js, _ := endpoint.GetConnection().JetStream()
+
+	return js.PublishAsyncPending()
 }
