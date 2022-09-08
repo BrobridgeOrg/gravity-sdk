@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	adapter_manager_pb "github.com/BrobridgeOrg/gravity-api/service/adapter_manager"
@@ -16,6 +17,12 @@ import (
 )
 
 var log = logrus.New()
+
+var pubReqPool = sync.Pool{
+	New: func() interface{} {
+		return &dsa.PublishRequest{}
+	},
+}
 
 type AdapterConnector struct {
 	id      string
@@ -217,12 +224,11 @@ func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[s
 
 	js, _ := endpoint.GetConnection().JetStream()
 
-	request := &dsa.PublishRequest{
-		EventName: eventName,
-		Payload:   payload,
-	}
-
-	reqData, _ := proto.Marshal(request)
+	req := pubReqPool.Get().(*dsa.PublishRequest)
+	req.EventName = eventName
+	req.Payload = payload
+	reqData, _ := proto.Marshal(req)
+	pubReqPool.Put(req)
 
 	// Send
 	_, err = js.PublishAsync(endpoint.Channel("dsa.event"), reqData)
