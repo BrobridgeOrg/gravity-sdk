@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/BrobridgeOrg/broton v0.0.7
-	github.com/BrobridgeOrg/gravity-api v0.2.27
+	github.com/BrobridgeOrg/gravity-api v0.2.28
 	github.com/BrobridgeOrg/gravity-transmitter-postgres v0.0.0-20210824004507-cf5a2b3fb5e7 // indirect
 	github.com/BrobridgeOrg/sequential-data-flow v0.0.2
 	github.com/cfsghost/buffered-input v0.0.2
