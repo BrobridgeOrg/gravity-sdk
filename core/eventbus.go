@@ -48,7 +48,7 @@ func (eb *EventBus) Connect() error {
 	}
 
 	eb.connection = nc
-	eb.jetStreamContext, err = nc.JetStream()
+	eb.jetStreamContext, err = nc.JetStream(nats.PublishAsyncMaxPending(1024000))
 	if err != nil {
 		return err
 	}
