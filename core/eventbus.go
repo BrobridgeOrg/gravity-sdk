@@ -18,10 +18,11 @@ type EventBusHandler struct {
 }
 
 type EventBus struct {
-	connection *nats.Conn
-	host       string
-	handler    *EventBusHandler
-	options    *EventBusOptions
+	connection       *nats.Conn
+	jetStreamContext nats.JetStreamContext
+	host             string
+	handler          *EventBusHandler
+	options          *EventBusOptions
 }
 
 func NewEventBus(host string, handler EventBusHandler, options EventBusOptions) *EventBus {
@@ -47,6 +48,10 @@ func (eb *EventBus) Connect() error {
 	}
 
 	eb.connection = nc
+	eb.jetStreamContext, err = nc.JetStream()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -59,4 +64,8 @@ func (eb *EventBus) ReconnectHandler(natsConn *nats.Conn) {
 
 func (eb *EventBus) GetConnection() *nats.Conn {
 	return eb.connection
+}
+
+func (eb *EventBus) GetJetStreamContext() nats.JetStreamContext {
+	return eb.jetStreamContext
 }

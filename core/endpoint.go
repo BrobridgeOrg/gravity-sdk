@@ -51,6 +51,10 @@ func (endpoint *Endpoint) GetConnection() *nats.Conn {
 	return endpoint.client.eventbus.GetConnection()
 }
 
+func (endpoint *Endpoint) GetJetStreamContext() nats.JetStreamContext {
+	return endpoint.client.eventbus.GetJetStreamContext()
+}
+
 func (endpoint *Endpoint) Channel(channelName string) string {
 	return fmt.Sprintf("%s.%s", endpoint.domain, channelName)
 }

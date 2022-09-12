@@ -222,7 +222,8 @@ func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[s
 		return err
 	}
 
-	js, _ := endpoint.GetConnection().JetStream()
+	//js, _ := endpoint.GetConnection().JetStream()
+	js := endpoint.GetJetStreamContext()
 
 	req := pubReqPool.Get().(*dsa.PublishRequest)
 	req.EventName = eventName
@@ -247,7 +248,8 @@ func (ac *AdapterConnector) PublishComplete() <-chan struct{} {
 		return nil
 	}
 
-	js, _ := endpoint.GetConnection().JetStream()
+	//js, _ := endpoint.GetConnection().JetStream()
+	js := endpoint.GetJetStreamContext()
 
 	return js.PublishAsyncComplete()
 }
