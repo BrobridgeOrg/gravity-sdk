@@ -12,6 +12,7 @@ import (
 	"github.com/BrobridgeOrg/gravity-sdk/core"
 	buffered_input "github.com/cfsghost/buffered-input"
 	"github.com/golang/protobuf/proto"
+	nats "github.com/nats-io/nats.go"
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -231,8 +232,11 @@ func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[s
 	reqData, _ := proto.Marshal(req)
 	pubReqPool.Put(req)
 
+	// process msgId from meta
+	msgId := fmt.Sprintf("%v", meta["Msg-Id"])
+
 	// Send
-	_, err = js.PublishAsync(endpoint.Channel("dsa.event"), reqData)
+	_, err = js.PublishAsync(endpoint.Channel("dsa.event"), reqData, nats.MsgId(msgId))
 	if err != nil {
 		return err
 	}
