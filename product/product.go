@@ -1,6 +1,7 @@
 package product
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +29,11 @@ type ProductSetting struct {
 	Stream          string                 `json:"stream"`
 	CreatedAt       time.Time              `json:"createdAt"`
 	UpdatedAt       time.Time              `json:"updatedAt"`
+}
+
+type SnapshotInfo struct {
+	Name       string           `json:"name"`
+	Partitions map[int32]uint64 `json:"partitions"`
 }
 
 type ProductClient struct {
@@ -270,4 +276,90 @@ func (pc *ProductClient) CreateSnapshot(productName string, opts ...SnapshotOpt)
 
 	return s, nil
 
+}
+
+func (pc *ProductClient) GetSnapshotInfo(name string) (*SnapshotInfo, error) {
+
+	// Preparing request
+	req := &GetProductSnapshotInfoRequest{
+		Product: name,
+	}
+
+	reqData, _ := json.Marshal(req)
+
+	// Send request
+	apiPath := fmt.Sprintf(SnapshotAPI+".INFO", pc.options.Domain)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parsing response
+	resp := &GetProductSnapshotInfoReply{}
+	err = json.Unmarshal(msg.Data, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, errors.New(resp.Error.Message)
+	}
+
+	info := &SnapshotInfo{
+		Name:       resp.Product,
+		Partitions: resp.Partitions,
+	}
+
+	return info, nil
+}
+
+func (pc *ProductClient) FetchSnapshot(productName string, partition int32, revision uint64) (*SnapshotInfo, error) {
+	return nil, nil
+}
+
+func (pc *ProductClient) fetchSnapshot(productName string, partition int32, lastPrimaryKey []byte, deliverySubject string, limit int64) ([]byte, error) {
+
+	// Encode last primary key
+	dst := make([]byte, base64.StdEncoding.EncodedLen(len(lastPrimaryKey)))
+	base64.StdEncoding.Encode(dst, lastPrimaryKey)
+
+	// Preparing request
+	req := &FetchProductSnapshotRequest{
+		Product:         productName,
+		Partition:       partition,
+		DeliverySubject: deliverySubject,
+		LastPrimaryKey:  string(dst),
+		Limit:           limit,
+	}
+
+	reqData, _ := json.Marshal(req)
+
+	// Send request
+	apiPath := fmt.Sprintf(SnapshotAPI+".Fetch", pc.options.Domain)
+	msg, err := pc.client.Request(apiPath, reqData, time.Second*30)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parsing response
+	resp := &FetchProductSnapshotReply{}
+	err = json.Unmarshal(msg.Data, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Error != nil {
+		return nil, errors.New(resp.Error.Message)
+	}
+
+	// Decode last primary key
+	dst = make([]byte, base64.StdEncoding.DecodedLen(len(resp.LastPrimaryKey)))
+	n, err := base64.StdEncoding.Decode(dst, []byte(resp.LastPrimaryKey))
+	if err != nil {
+		return nil, err
+	}
+
+	dst = dst[:n]
+
+	return dst, nil
 }
