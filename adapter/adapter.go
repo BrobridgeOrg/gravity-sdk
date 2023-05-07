@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/BrobridgeOrg/gravity-sdk/core"
+	"github.com/BrobridgeOrg/gravity-sdk/v2/core"
 
 	jsoniter "github.com/json-iterator/go"
 	nats "github.com/nats-io/nats.go"

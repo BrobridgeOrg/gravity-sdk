@@ -1,6 +1,6 @@
 package product
 
-import "github.com/BrobridgeOrg/gravity-sdk/core"
+import "github.com/BrobridgeOrg/gravity-sdk/v2/core"
 
 func NotFoundSnapshotViewErr() *core.Error {
 	return &core.Error{

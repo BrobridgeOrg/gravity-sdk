@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/BrobridgeOrg/gravity-sdk/core"
+	"github.com/BrobridgeOrg/gravity-sdk/v2/core"
 	"github.com/nats-io/nats.go"
 )
 

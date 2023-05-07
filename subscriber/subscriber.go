@@ -3,7 +3,7 @@ package subscriber
 import (
 	"os"
 
-	"github.com/BrobridgeOrg/gravity-sdk/core"
+	"github.com/BrobridgeOrg/gravity-sdk/v2/core"
 	nats "github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
