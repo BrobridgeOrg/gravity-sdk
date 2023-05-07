@@ -1,4 +1,4 @@
-module github.com/BrobridgeOrg/gravity-sdk
+module github.com/BrobridgeOrg/gravity-sdk/v2
 
 go 1.15
 
