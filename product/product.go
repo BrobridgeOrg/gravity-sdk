@@ -30,6 +30,18 @@ type ProductSetting struct {
 	UpdatedAt       time.Time              `json:"updatedAt"`
 }
 
+type ProductState struct {
+	EventCount uint64    `json:"eventCount"`
+	Bytes      uint64    `json:"bytes"`
+	FirstTime  time.Time `json:"firstTime"`
+	LastTime   time.Time `json:"lastTime"`
+}
+
+type ProductInfo struct {
+	Setting *ProductSetting `json:"setting"`
+	State   *ProductState   `json:"state"`
+}
+
 type ProductClient struct {
 	options     *Options
 	client      *core.Client
@@ -178,7 +190,7 @@ func (pc *ProductClient) PurgeProduct(name string) error {
 	return nil
 }
 
-func (pc *ProductClient) GetProduct(name string) (*ProductSetting, error) {
+func (pc *ProductClient) GetProduct(name string) (*ProductInfo, error) {
 
 	// Preparing request
 	req := &InfoProductRequest{
@@ -205,12 +217,15 @@ func (pc *ProductClient) GetProduct(name string) (*ProductSetting, error) {
 		return nil, errors.New(resp.Error.Message)
 	}
 
-	return resp.Setting, nil
+	return &ProductInfo{
+		Setting: resp.Setting,
+		State:   resp.State,
+	}, nil
 }
 
-func (pc *ProductClient) ListProducts() ([]*ProductSetting, error) {
+func (pc *ProductClient) ListProducts() ([]*ProductInfo, error) {
 
-	products := make([]*ProductSetting, 0)
+	products := make([]*ProductInfo, 0)
 
 	// Preparing request
 	req := &ListProductsRequest{}

@@ -12,7 +12,7 @@ type ListProductsRequest struct {
 type ListProductsReply struct {
 	core.ErrorReply
 
-	Products []*ProductSetting `json:"products"`
+	Products []*ProductInfo `json:"products"`
 }
 
 type CreateProductRequest struct {
@@ -49,6 +49,7 @@ type InfoProductRequest struct {
 type InfoProductReply struct {
 	core.ErrorReply
 	Setting *ProductSetting `json:"setting"`
+	State   *ProductState   `json:"state"`
 }
 
 type PurgeProductRequest struct {
