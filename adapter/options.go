@@ -17,7 +17,7 @@ type Options struct {
 
 func NewOptions() *Options {
 	return &Options{
-		Domain:              "defuatl",
+		Domain:              "defualt",
 		BatchSize:           1000,
 		PingInterval:        10 * time.Second,
 		MaxPingsOutstanding: 3,
