@@ -136,6 +136,7 @@ func (ac *AdapterConnector) PublishAsync(eventName string, payload []byte, meta 
 	}
 
 	if meta != nil {
+		m.Header = make(map[string][]string)
 		for k, v := range meta {
 			m.Header.Add(k, v)
 		}
