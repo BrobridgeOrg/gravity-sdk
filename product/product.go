@@ -17,29 +17,33 @@ var (
 	ErrInvalidProductName   = errors.New("invalid product name")
 )
 
+// ProductSetting defines the structure of a Data Product setting.
+// It includes information such as name, description, Schema, and event handling rules.
 type ProductSetting struct {
-	Name            string                 `json:"name"`
-	Description     string                 `json:"desc"`
-	Enabled         bool                   `json:"enabled"`
-	Rules           map[string]*Rule       `json:"rules"`
-	Schema          map[string]interface{} `json:"schema"`
-	EnabledSnapshot bool                   `json:"enabledSnapshot"`
-	Snapshot        *SnapshotSetting       `json:"snapshot"`
-	Stream          string                 `json:"stream"`
-	CreatedAt       time.Time              `json:"createdAt"`
-	UpdatedAt       time.Time              `json:"updatedAt"`
+	Name            string                 `json:"name"`            // A unique identifier for the product.
+	Description     string                 `json:"desc"`            // A brief description of the product.
+	Enabled         bool                   `json:"enabled"`         // Flag indicating whether the product is active or not.
+	Rules           map[string]*Rule       `json:"rules"`           // A map of event handling rules associated with the product.
+	Schema          map[string]interface{} `json:"schema"`          // The data schema defining the structure of the product's data.
+	EnabledSnapshot bool                   `json:"enabledSnapshot"` // Flag indicating whether snapshots are enabled for the product.
+	Snapshot        *SnapshotSetting       `json:"snapshot"`        // Configuration settings for product snapshots.
+	Stream          string                 `json:"stream"`          // The name of the data stream associated with the product.
+	CreatedAt       time.Time              `json:"createdAt"`       // Timestamp indicating when the product was created.
+	UpdatedAt       time.Time              `json:"updatedAt"`       // Timestamp indicating the last update to the product.
 }
 
+// ProductState represents the current state of a data product.
 type ProductState struct {
-	EventCount uint64    `json:"eventCount"`
-	Bytes      uint64    `json:"bytes"`
-	FirstTime  time.Time `json:"firstTime"`
-	LastTime   time.Time `json:"lastTime"`
+	EventCount uint64    `json:"eventCount"` // The total number of events processed by the product.
+	Bytes      uint64    `json:"bytes"`      // The total number of bytes processed by the product.
+	FirstTime  time.Time `json:"firstTime"`  // Timestamp of the first event processed by the product.
+	LastTime   time.Time `json:"lastTime"`   // Timestamp of the most recent event processed by the product.
 }
 
+// ProductInfo encapsulates both the settings and the current state of a data product.
 type ProductInfo struct {
-	Setting *ProductSetting `json:"setting"`
-	State   *ProductState   `json:"state"`
+	Setting *ProductSetting `json:"setting"` // The configuration settings of the product.
+	State   *ProductState   `json:"state"`   // The current operational state of the product.
 }
 
 type ProductClient struct {
@@ -69,6 +73,8 @@ func NewProductClient(client *core.Client, options *Options) *ProductClient {
 	return pc
 }
 
+// CreateProduct creates a new product with the specified settings.
+// It returns a pointer to the newly created ProductSetting or an error if the creation fails.
 func (pc *ProductClient) CreateProduct(productSetting *ProductSetting) (*ProductSetting, error) {
 
 	// Preparing request
@@ -99,6 +105,8 @@ func (pc *ProductClient) CreateProduct(productSetting *ProductSetting) (*Product
 	return resp.Setting, nil
 }
 
+// DeleteProduct removes the product identified by the given name.
+// It returns an error if the deletion fails.
 func (pc *ProductClient) DeleteProduct(name string) error {
 
 	// Preparing request
@@ -129,6 +137,8 @@ func (pc *ProductClient) DeleteProduct(name string) error {
 	return nil
 }
 
+// UpdateProduct updates the settings of an existing product identified by name.
+// It returns the updated ProductSetting or an error if the update fails.
 func (pc *ProductClient) UpdateProduct(name string, productSetting *ProductSetting) (*ProductSetting, error) {
 
 	// Preparing request
@@ -160,6 +170,8 @@ func (pc *ProductClient) UpdateProduct(name string, productSetting *ProductSetti
 	return resp.Setting, nil
 }
 
+// PurgeProduct permanently removes the product identified by the given name from the system.
+// It returns an error if the purge operation fails.
 func (pc *ProductClient) PurgeProduct(name string) error {
 
 	// Preparing request
@@ -190,6 +202,8 @@ func (pc *ProductClient) PurgeProduct(name string) error {
 	return nil
 }
 
+// GetProduct retrieves the information of a product identified by the given name.
+// It returns a pointer to ProductInfo or an error if the retrieval fails.
 func (pc *ProductClient) GetProduct(name string) (*ProductInfo, error) {
 
 	// Preparing request
@@ -223,6 +237,8 @@ func (pc *ProductClient) GetProduct(name string) (*ProductInfo, error) {
 	}, nil
 }
 
+// ListProducts returns a list of all available products.
+// It returns a slice of ProductInfo pointers or an error if the listing fails.
 func (pc *ProductClient) ListProducts() ([]*ProductInfo, error) {
 
 	products := make([]*ProductInfo, 0)
@@ -256,6 +272,9 @@ func (pc *ProductClient) ListProducts() ([]*ProductInfo, error) {
 	return resp.Products, nil
 }
 
+// CreateSnapshot creates a snapshot of a product identified by productName.
+// Additional options can be passed using SnapshotOpt variadic parameters.
+// It returns a pointer to the created Snapshot or an error if the creation fails.
 func (pc *ProductClient) CreateSnapshot(productName string, opts ...SnapshotOpt) (*Snapshot, error) {
 
 	// Check whether product exists or not

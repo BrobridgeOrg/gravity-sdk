@@ -1,16 +1,14 @@
 package product
 
 type Options struct {
-	Endpoint string
-	Domain   string
-	Verbose  bool
+	Domain  string // Domain specifies the target domain or environment the options apply to.
+	Verbose bool   // Verbose indicates whether verbose or detailed logging should be enabled.
 }
 
 func NewOptions() *Options {
 	options := &Options{
-		Endpoint: "default",
-		Domain:   "gravity",
-		Verbose:  false,
+		Domain:  "gravity",
+		Verbose: false,
 	}
 
 	return options

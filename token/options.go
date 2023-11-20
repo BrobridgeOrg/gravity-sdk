@@ -1,16 +1,14 @@
 package token
 
 type Options struct {
-	Endpoint string
-	Domain   string
-	Verbose  bool
+	Domain  string
+	Verbose bool
 }
 
 func NewOptions() *Options {
 	options := &Options{
-		Endpoint: "default",
-		Domain:   "gravity",
-		Verbose:  false,
+		Domain:  "gravity",
+		Verbose: false,
 	}
 
 	return options
