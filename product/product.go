@@ -182,7 +182,7 @@ func (pc *ProductClient) UpdateProduct(name string, productSetting *ProductSetti
 	return resp.Setting, nil
 }
 
-// PurgeProduct permanently removes the product identified by the given name from the system.
+// PurgeProduct purge a data product without deleting it.
 // It returns an error if the purge operation fails.
 func (pc *ProductClient) PurgeProduct(name string) error {
 
