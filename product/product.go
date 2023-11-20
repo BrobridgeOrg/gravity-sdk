@@ -11,6 +11,10 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+const (
+	ProductEventStream = "GVT_%s_DP_%s"
+)
+
 var (
 	ErrProductNotFound      = errors.New("product not found")
 	ErrProductExistsAlready = errors.New("product exists already")
@@ -76,6 +80,14 @@ func NewProductClient(client *core.Client, options *Options) *ProductClient {
 // CreateProduct creates a new product with the specified settings.
 // It returns a pointer to the newly created ProductSetting or an error if the creation fails.
 func (pc *ProductClient) CreateProduct(productSetting *ProductSetting) (*ProductSetting, error) {
+
+	if len(productSetting.Name) == 0 {
+		return nil, ErrInvalidProductName
+	}
+
+	if len(productSetting.Stream) == 0 {
+		productSetting.Stream = fmt.Sprintf(ProductEventStream, pc.options.Domain, productSetting.Name)
+	}
 
 	// Preparing request
 	req := &CreateProductRequest{
