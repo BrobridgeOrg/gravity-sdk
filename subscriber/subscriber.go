@@ -60,6 +60,12 @@ func (s *Subscriber) Disconnect() error {
 	return s.Disconnect()
 }
 
+// Subscribe sets up a subscription to a specified product on Gravity.
+// This function allows for message consumption by registering a handler function to process incoming messages.
+// productName: The name of the product to subscribe to.
+// handler: A function that will be called to handle each incoming message. It takes a *nats.Msg as a parameter.
+// opts: A variadic list of options to customize the subscription behavior.
+// Returns a pointer to the Subscription object and an error if the subscription fails.
 func (s *Subscriber) Subscribe(productName string, handler func(*nats.Msg), opts ...SubscriptionOpt) (*Subscription, error) {
 
 	subscription := NewSubscription(s, s.options.Domain, productName, handler, opts...)

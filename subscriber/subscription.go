@@ -22,6 +22,8 @@ type Subscription struct {
 	nativeSubscriptions map[string]*nats.Subscription
 	subOpts             []nats.SubOpt
 }
+
+// SubscriptionOpt is a type of function that modifies a Subscription.
 type SubscriptionOpt func(*Subscription)
 
 func NewSubscription(s *Subscriber, domain string, productName string, handler func(*nats.Msg), opts ...SubscriptionOpt) *Subscription {
@@ -44,12 +46,17 @@ func NewSubscription(s *Subscriber, domain string, productName string, handler f
 	return sub
 }
 
+// DeliverNew configures the Subscriber to begin receiving events from the most recently produced events.
+// This option is used when the Subscriber needs to start receiving the latest data, ignoring previous events.
 func DeliverNew() func(*Subscription) {
 	return func(s *Subscription) {
 		s.subOpts = append(s.subOpts, nats.DeliverNew())
 	}
 }
 
+// StartSequence sets the starting sequence number from which the Subscriber begins to receive events.
+// This option is used to specify a particular point in the event sequence to start receiving messages from.
+// seq: The sequence number from which to start receiving events.
 func StartSequence(seq uint64) func(*Subscription) {
 	return func(s *Subscription) {
 		s.startSequence = seq
@@ -57,12 +64,18 @@ func StartSequence(seq uint64) func(*Subscription) {
 	}
 }
 
+// InitialLoad determines whether to receive an initial copy of all existing data when first subscribing and interfacing with a Data Product.
+// This option allows the subscriber to get a snapshot of all existing data before continuing to receive real-time data change events.
+// enabled: Set to true to enable receiving the initial data load.
 func InitialLoad(enabled bool) func(*Subscription) {
 	return func(s *Subscription) {
 		s.enabledInitialLoad = enabled
 	}
 }
 
+// Partition specifies the particular partitions of a data product to subscribe to.
+// This option is used to increase parallel computing capabilities by subscribing only to specific partitions of the data divided into 256 parts by Gravity.
+// partitions: A list of partition indices to subscribe to.
 func Partition(partitions ...int) func(*Subscription) {
 	return func(s *Subscription) {
 
@@ -113,6 +126,10 @@ func (sub *Subscription) subscribe(subject string) error {
 	return nil
 }
 
+// Subscribe initiates the subscription process for the specified data product in the Subscription object.
+// This function starts the reception of messages based on the configuration set in the Subscription.
+// It connects to the Gravity service and begins handling incoming messages using the handler function defined earlier.
+// Returns an error if the subscription process fails or if the Subscription is not properly configured.
 func (sub *Subscription) Subscribe() error {
 
 	// Subscribe to multiple partitions
@@ -142,6 +159,9 @@ func (sub *Subscription) Subscribe() error {
 	return nil
 }
 
+// Close terminates the subscription and closes the connection associated with it.
+// This function should be called to cleanly shutdown the subscription, ensuring that all resources are released properly.
+// Returns an error if the closing process encounters any issues.
 func (sub *Subscription) Close() error {
 
 	// Unsubscribe all partitions
