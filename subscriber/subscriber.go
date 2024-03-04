@@ -1,9 +1,14 @@
 package subscriber
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
+	"time"
 
 	"github.com/BrobridgeOrg/gravity-sdk/v2/core"
+	"github.com/BrobridgeOrg/gravity-sdk/v2/product"
 	nats "github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
@@ -75,4 +80,37 @@ func (s *Subscriber) Subscribe(productName string, handler func(*nats.Msg), opts
 	}
 
 	return subscription, nil
+}
+
+// Reset removes the subscription to a specified product on Gravity.
+// productName: The name of the product to reset the subscription.
+// Returns an error if the reset fails.
+func (s *Subscriber) Reset(productName string) error {
+
+	// Preparing request
+	req := &product.DeleteSubscriptionRequest{
+		Product: productName,
+	}
+
+	reqData, _ := json.Marshal(req)
+
+	// Send request
+	apiPath := fmt.Sprintf(product.ProductAPI+".DELETE_SUBSCRIPTION", s.options.Domain)
+	msg, err := s.client.Request(apiPath, reqData, time.Second*30)
+	if err != nil {
+		return err
+	}
+
+	// Parsing response
+	resp := &product.DeleteSubscriptionReply{}
+	err = json.Unmarshal(msg.Data, resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.Error != nil {
+		return errors.New(resp.Error.Message)
+	}
+
+	return nil
 }

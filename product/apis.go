@@ -73,7 +73,8 @@ type PrepareSubscriptionReply struct {
 }
 
 type GetSubscriptionRequest struct {
-	Product string `json:"product"`
+	Product      string `json:"product"`
+	Subscription string `json:"subscription"`
 }
 
 type GetSubscriptionReply struct {
