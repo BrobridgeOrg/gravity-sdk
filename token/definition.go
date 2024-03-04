@@ -37,3 +37,12 @@ func (ts *TokenSetting) GetSubscriptionByProduct(product string) (string, error)
 
 	return "", ErrSubscriptionNotFound
 }
+
+func (ts *TokenSetting) CheckPermission(perm string) bool {
+
+	if _, ok := ts.Permissions["ADMIN"]; ok {
+		return true
+	}
+
+	return false
+}

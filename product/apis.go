@@ -82,7 +82,8 @@ type GetSubscriptionReply struct {
 }
 
 type DeleteSubscriptionRequest struct {
-	Product string `json:"product"`
+	Product      string `json:"product"`
+	Subscription string `json:"subscription"`
 }
 
 type DeleteSubscriptionReply struct {
