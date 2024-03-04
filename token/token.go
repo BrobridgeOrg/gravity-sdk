@@ -16,15 +16,6 @@ var (
 	ErrInvalidTokenToken  = errors.New("invalid product token")
 )
 
-type TokenSetting struct {
-	ID          string                 `json:"id"`
-	Description string                 `json:"desc"`
-	Enabled     bool                   `json:"enabled"`
-	Permissions map[string]*Permission `json:"permissions"`
-	CreatedAt   time.Time              `json:"createdAt"`
-	UpdatedAt   time.Time              `json:"updatedAt"`
-}
-
 type TokenClient struct {
 	options     *Options
 	client      *core.Client
@@ -80,12 +71,12 @@ func (pc *TokenClient) ListAvailablePermissions() (map[string]string, error) {
 	return resp.Permissions, nil
 }
 
-func (pc *TokenClient) CreateToken(tokenID string, productSetting *TokenSetting) (string, *TokenSetting, error) {
+func (pc *TokenClient) CreateToken(tokenID string, tokenSetting *TokenSetting) (string, *TokenSetting, error) {
 
 	// Preparing request
 	req := &CreateTokenRequest{
 		TokenID: tokenID,
-		Setting: productSetting,
+		Setting: tokenSetting,
 	}
 
 	reqData, _ := json.Marshal(req)

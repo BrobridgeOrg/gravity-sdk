@@ -1,6 +1,9 @@
 package product
 
-import "github.com/BrobridgeOrg/gravity-sdk/v2/core"
+import (
+	"github.com/BrobridgeOrg/gravity-sdk/v2/core"
+	"github.com/BrobridgeOrg/gravity-sdk/v2/subscription"
+)
 
 const (
 	ProductAPI = "$GVT.%s.API.PRODUCT"
@@ -61,9 +64,27 @@ type PurgeProductReply struct {
 }
 
 type PrepareSubscriptionRequest struct {
-	Product string `json:"product"`
+	Product   string                          `json:"product"`
+	Consumers []*subscription.ConsumerSetting `json:"consumers"`
 }
 
 type PrepareSubscriptionReply struct {
+	core.ErrorReply
+}
+
+type GetSubscriptionRequest struct {
+	Product string `json:"product"`
+}
+
+type GetSubscriptionReply struct {
+	core.ErrorReply
+	Setting *subscription.SubscriptionSetting `json:"setting"`
+}
+
+type DeleteSubscriptionRequest struct {
+	Product string `json:"product"`
+}
+
+type DeleteSubscriptionReply struct {
 	core.ErrorReply
 }

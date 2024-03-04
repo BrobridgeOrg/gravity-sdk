@@ -1,26 +1,31 @@
 package subscriber
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
 
+const ProductEventStream = "GVT_%s_DP_%s"
 const productSubject = "$GVT.%s.DP.%s.>"
 const productEventSubject = "$GVT.%s.DP.%s.%s.EVENT.>"
 const productEventConsumer = "GVT_%s_SUBSCRIBER_%s"
 
 type Subscription struct {
-	subscriber          *Subscriber
-	handler             func(*nats.Msg)
-	domain              string
-	productName         string
-	startSequence       uint64
-	enabledInitialLoad  bool
-	partitions          []int
-	nativeSubscriptions map[string]*nats.Subscription
-	subOpts             []nats.SubOpt
+	ctx                context.Context
+	cancelCtx          func()
+	subscriber         *Subscriber
+	handler            func(*nats.Msg)
+	domain             string
+	productName        string
+	startSequence      uint64
+	enabledInitialLoad bool
+	partitions         []int
+	s                  *nats.Subscription
+	subOpts            []nats.SubOpt
 }
 
 // SubscriptionOpt is a type of function that modifies a Subscription.
@@ -29,19 +34,23 @@ type SubscriptionOpt func(*Subscription)
 func NewSubscription(s *Subscriber, domain string, productName string, handler func(*nats.Msg), opts ...SubscriptionOpt) *Subscription {
 
 	sub := &Subscription{
-		subscriber:          s,
-		handler:             handler,
-		domain:              domain,
-		productName:         productName,
-		startSequence:       1,
-		partitions:          []int{-1},
-		nativeSubscriptions: make(map[string]*nats.Subscription),
-		subOpts:             make([]nats.SubOpt, 0),
+		subscriber:    s,
+		handler:       handler,
+		domain:        domain,
+		productName:   productName,
+		startSequence: 1,
+		partitions:    []int{-1},
+		subOpts:       make([]nats.SubOpt, 0),
 	}
 
 	for _, opt := range opts {
 		opt(sub)
 	}
+
+	// Preparing context
+	ctx, cancel := context.WithCancel(context.Background())
+	sub.ctx = ctx
+	sub.cancelCtx = cancel
 
 	return sub
 }
@@ -94,7 +103,7 @@ func Partition(partitions ...int) func(*Subscription) {
 	}
 }
 
-func (sub *Subscription) subscribe(subject string) error {
+func (sub *Subscription) subscribe(subjects ...string) error {
 
 	js, err := sub.subscriber.client.GetJetStream()
 	if err != nil {
@@ -103,25 +112,51 @@ func (sub *Subscription) subscribe(subject string) error {
 
 	var opts []nats.SubOpt
 
-	opts = append(sub.subOpts, nats.AckAll(), nats.MaxAckPending(20480))
+	opts = append(sub.subOpts,
+		nats.ConsumerFilterSubjects(subjects...),
+		nats.AckAll(),
+		//		nats.MaxAckPending(20480),
+		nats.BindStream(fmt.Sprintf(ProductEventStream, sub.domain, sub.productName)),
+		nats.PullMaxWaiting(1024),
+	)
 
 	// Specific consumer if subscriber name has been set
+	consumerName := ""
 	if len(sub.subscriber.name) > 0 {
-		consumerName := fmt.Sprintf(productEventConsumer, sub.domain, sub.subscriber.name)
+		consumerName = fmt.Sprintf(productEventConsumer, sub.domain, sub.subscriber.name)
 		opts = append(opts, nats.Durable(consumerName))
 	}
-
-	s, err := js.Subscribe(subject, func(msg *nats.Msg) {
-		sub.handler(msg)
-	}, opts...)
+	/*
+		s, err := js.Subscribe("", func(msg *nats.Msg) {
+			sub.handler(msg)
+		}, opts...)
+	*/
+	s, err := js.PullSubscribe("", consumerName, opts...)
 	if err != nil {
 		return err
 	}
 
-	s.SetPendingLimits(-1, -1)
-	sub.subscriber.client.GetConnection().Flush()
+	//s.SetPendingLimits(-1, -1)
+	//sub.subscriber.client.GetConnection().Flush()
+	sub.s = s
 
-	sub.nativeSubscriptions[subject] = s
+	go func() {
+
+		defer sub.cancelCtx()
+
+		for {
+			select {
+			case <-sub.ctx.Done():
+				return
+			default:
+			}
+
+			msgs, _ := s.Fetch(1024, nats.MaxWait(time.Second))
+			for _, msg := range msgs {
+				sub.handler(msg)
+			}
+		}
+	}()
 
 	return nil
 }
@@ -131,6 +166,9 @@ func (sub *Subscription) subscribe(subject string) error {
 // It connects to the Gravity service and begins handling incoming messages using the handler function defined earlier.
 // Returns an error if the subscription process fails or if the Subscription is not properly configured.
 func (sub *Subscription) Subscribe() error {
+
+	partitions := make([]string, 0)
+	subjects := make([]string, 0)
 
 	// Subscribe to multiple partitions
 	for _, p := range sub.partitions {
@@ -145,15 +183,18 @@ func (sub *Subscription) Subscribe() error {
 		}
 
 		subject := fmt.Sprintf(productEventSubject, sub.domain, sub.productName, partition)
+		subjects = append(subjects, subject)
+		partitions = append(partitions, partition)
+	}
 
-		log.WithFields(logrus.Fields{
-			"subject": subject,
-		}).Info("Subscribing to subject")
+	log.WithFields(logrus.Fields{
+		"subject":    fmt.Sprintf(productEventSubject, sub.domain, sub.productName, "<partition>"),
+		"partitions": partitions,
+	}).Debug("Subscribing to subject")
 
-		err := sub.subscribe(subject)
-		if err != nil {
-			return err
-		}
+	err := sub.subscribe(subjects...)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -163,14 +204,15 @@ func (sub *Subscription) Subscribe() error {
 // This function should be called to cleanly shutdown the subscription, ensuring that all resources are released properly.
 // Returns an error if the closing process encounters any issues.
 func (sub *Subscription) Close() error {
-
-	// Unsubscribe all partitions
-	for _, s := range sub.nativeSubscriptions {
-		err := s.Unsubscribe()
+	/*
+		// Unsubscribe all partitions
+		err := sub.s.Unsubscribe()
 		if err != nil {
 			return err
 		}
-	}
+	*/
+
+	sub.ctx.Done()
 
 	return nil
 }
