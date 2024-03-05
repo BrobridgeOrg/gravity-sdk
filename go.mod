@@ -1,6 +1,6 @@
 module github.com/BrobridgeOrg/gravity-sdk/v2
 
-go 1.15
+go 1.21
 
 require (
 	github.com/golang/protobuf v1.5.2 // indirect
