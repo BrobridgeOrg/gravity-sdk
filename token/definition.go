@@ -23,6 +23,15 @@ type TokenSetting struct {
 	UpdatedAt    time.Time              `json:"updatedAt"`
 }
 
+func (ts *TokenSetting) CheckPermission(perm string) bool {
+
+	if _, ok := ts.Permissions["ADMIN"]; ok {
+		return true
+	}
+
+	return false
+}
+
 func (ts *TokenSetting) GetSubscriptionByProduct(product string) (string, error) {
 
 	if ts.Subscription == nil {
@@ -38,9 +47,13 @@ func (ts *TokenSetting) GetSubscriptionByProduct(product string) (string, error)
 	return "", ErrSubscriptionNotFound
 }
 
-func (ts *TokenSetting) CheckPermission(perm string) bool {
+func (ts *TokenSetting) CheckSubscription(subscriptionID string) bool {
 
-	if _, ok := ts.Permissions["ADMIN"]; ok {
+	if ts.CheckPermission("ADMIN") {
+		return true
+	}
+
+	if _, ok := ts.Subscription.Subscriptions[subscriptionID]; ok {
 		return true
 	}
 

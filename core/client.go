@@ -54,6 +54,14 @@ func (client *Client) Connect(host string, options *Options) error {
 	return nil
 }
 
+func (client *Client) IsAuthenticationRequired() bool {
+	if len(client.options.Token) > 0 {
+		return true
+	}
+
+	return false
+}
+
 func (client *Client) Disconnect() {
 	client.eventbus.Close()
 }

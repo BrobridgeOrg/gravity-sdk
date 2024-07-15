@@ -7,6 +7,7 @@ const (
 )
 
 type ListSubscriptionsRequest struct {
+	Product string `json:"product"`
 }
 
 type ListSubscriptionsReply struct {
@@ -16,8 +17,7 @@ type ListSubscriptionsReply struct {
 }
 
 type CreateSubscriptionRequest struct {
-	SubscriptionID string               `json:"subscriptionID"`
-	Setting        *SubscriptionSetting `json:"setting"`
+	Setting *SubscriptionSetting `json:"setting"`
 }
 
 type CreateSubscriptionReply struct {
@@ -52,4 +52,12 @@ type GetSubscriptionReply struct {
 	core.ErrorReply
 	SubscriptionID string               `json:"subscriptionID"`
 	Setting        *SubscriptionSetting `json:"setting"`
+}
+
+type PrepareSubscriptionRequest struct {
+	SubscriptionID string `json:"subscriptionID"`
+}
+
+type PrepareSubscriptionReply struct {
+	core.ErrorReply
 }
