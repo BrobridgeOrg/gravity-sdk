@@ -177,3 +177,7 @@ func (ac *AdapterConnector) PublishAsync(eventName string, payload []byte, meta 
 func (ac *AdapterConnector) PublishAsyncComplete() <-chan struct{} {
 	return ac.js.PublishAsyncComplete()
 }
+
+func (ac *AdapterConnector) GetJetStream() nats.JetStreamContext {
+	return ac.js
+}
