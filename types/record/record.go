@@ -30,6 +30,42 @@ var (
 	NotFloatErr           = errors.New("Not float")
 )
 
+const (
+	PathTokenTypeKey   = 0
+	PathTokenTypeIndex = 1
+)
+
+type PathToken struct {
+	Type  int
+	Value string
+}
+
+func ParsePath(input string) []PathToken {
+	var result []PathToken
+	start := 0
+
+	for i := 0; i < len(input); i++ {
+		char := input[i]
+		if char == '.' || char == '[' {
+			if start < i {
+				result = append(result, PathToken{Type: PathTokenTypeKey, Value: input[start:i]})
+			}
+			start = i + 1
+		} else if char == ']' {
+			if start < i {
+				result = append(result, PathToken{Type: PathTokenTypeIndex, Value: input[start:i]})
+			}
+			start = i + 1
+		}
+	}
+
+	if start < len(input) {
+		result = append(result, PathToken{Type: PathTokenTypeKey, Value: input[start:]})
+	}
+
+	return result
+}
+
 func GetValueData(value *Value) interface{} {
 	return getValueData(value, false)
 }
@@ -369,47 +405,56 @@ func GetField(fields []*Field, fieldName string) *Field {
 }
 
 func GetValueByPath(value *Value, key string) (*Value, error) {
+
 	var err error
 	state := value
-	parser := parse(key)
-	token := parser.nextItem()
-	for token.typ != tokenEnd && token.typ != tokenError {
+
+	tokens := ParsePath(key)
+	for _, token := range tokens {
 		if state, err = getValue(state, token); err != nil {
 			return nil, err
 		}
-		token = parser.nextItem()
 	}
-	if token.typ == tokenError {
-		return nil, fmt.Errorf(token.val)
-	}
+	/*
+		var err error
+		state := value
+		parser := parse(key)
+		token := parser.nextItem()
+		for token.typ != tokenEnd && token.typ != tokenError {
+			if state, err = getValue(state, token); err != nil {
+				return nil, err
+			}
+			token = parser.nextItem()
+		}
+		if token.typ == tokenError {
+			return nil, fmt.Errorf(token.val)
+		}
+	*/
 	return state, nil
 }
 
-func getValue(value *Value, key token) (*Value, error) {
-
+func getValue(value *Value, token PathToken) (*Value, error) {
 	switch value.Type {
 	case DataType_MAP:
-		switch key.typ {
-		case tokenIdentifier:
-			field := GetField(value.Map.Fields, key.val)
+		switch token.Type {
+		case PathTokenTypeKey:
+			field := GetField(value.Map.Fields, token.Value)
 			if field != nil {
 				return field.Value, nil
 			}
-
 			return nil, fmt.Errorf("key not found")
 		default:
 			return nil, fmt.Errorf("key not found")
 		}
 	case DataType_ARRAY:
-		switch key.typ {
-		case tokenArrayIndex:
-			index, err := strconv.Atoi(key.val)
+		switch token.Type {
+		case PathTokenTypeIndex:
+			index, err := strconv.Atoi(token.Value)
 			if err != nil {
-				return nil, fmt.Errorf("expected array index, but got %s", key.val)
+				return nil, fmt.Errorf("expected array index, but got %s", token.Value)
 			}
-
 			if index < 0 || index >= len(value.Array.Elements) {
-				return nil, fmt.Errorf("index out of bounds %s", key.val)
+				return nil, fmt.Errorf("index out of bounds %s", token.Value)
 			}
 			return value.Array.Elements[index], nil
 		default:
@@ -417,10 +462,46 @@ func getValue(value *Value, key token) (*Value, error) {
 		}
 	default:
 		return nil, fmt.Errorf("can't deal with this type %d", value.Type)
-
 	}
 }
 
+/*
+func getValue(value *Value, key token) (*Value, error) {
+
+		switch value.Type {
+		case DataType_MAP:
+			switch key.typ {
+			case tokenIdentifier:
+				field := GetField(value.Map.Fields, key.val)
+				if field != nil {
+					return field.Value, nil
+				}
+
+				return nil, fmt.Errorf("key not found")
+			default:
+				return nil, fmt.Errorf("key not found")
+			}
+		case DataType_ARRAY:
+			switch key.typ {
+			case tokenArrayIndex:
+				index, err := strconv.Atoi(key.val)
+				if err != nil {
+					return nil, fmt.Errorf("expected array index, but got %s", key.val)
+				}
+
+				if index < 0 || index >= len(value.Array.Elements) {
+					return nil, fmt.Errorf("index out of bounds %s", key.val)
+				}
+				return value.Array.Elements[index], nil
+			default:
+				return nil, fmt.Errorf("key not found")
+			}
+		default:
+			return nil, fmt.Errorf("can't deal with this type %d", value.Type)
+
+		}
+	}
+*/
 func getValueData(value *Value, isFlat bool) interface{} {
 
 	switch value.Type {
