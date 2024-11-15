@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/BrobridgeOrg/gravity-sdk/v2/core"
+	"github.com/klauspost/compress/s2"
 
 	jsoniter "github.com/json-iterator/go"
 	nats "github.com/nats-io/nats.go"
@@ -114,7 +115,6 @@ func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[s
 
 	m := &nats.Msg{
 		Subject: subject,
-		Data:    data,
 		Header:  nats.Header{},
 	}
 
@@ -122,6 +122,13 @@ func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[s
 		for k, v := range meta {
 			m.Header.Add(k, v)
 		}
+	}
+
+	if ac.options.Compression == S2Compression {
+		m.Header.Add("Content-Encoding", "s2")
+		m.Data = s2.Encode(nil, data)
+	} else {
+		m.Data = data
 	}
 
 	return js.PublishMsg(m)
@@ -159,7 +166,7 @@ func (ac *AdapterConnector) PublishAsync(eventName string, payload []byte, meta 
 
 	m := &nats.Msg{
 		Subject: subject,
-		Data:    data,
+		Header:  nats.Header{},
 	}
 
 	if meta != nil {
@@ -167,6 +174,13 @@ func (ac *AdapterConnector) PublishAsync(eventName string, payload []byte, meta 
 		for k, v := range meta {
 			m.Header.Add(k, v)
 		}
+	}
+
+	if ac.options.Compression == S2Compression {
+		m.Header.Add("Content-Encoding", "s2")
+		m.Data = s2.Encode(nil, data)
+	} else {
+		m.Data = data
 	}
 
 	return ac.js.PublishMsgAsync(m)

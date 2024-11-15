@@ -4,6 +4,13 @@ import (
 	"time"
 )
 
+type Compression int32
+
+const (
+	NoCompression Compression = iota
+	S2Compression
+)
+
 type Options struct {
 	Domain              string
 	BatchSize           int
@@ -12,6 +19,7 @@ type Options struct {
 	MaxReconnects       int
 	ReconnectHandler    func()
 	DisconnectHandler   func()
+	Compression         Compression
 	Verbose             bool
 }
 
@@ -24,6 +32,7 @@ func NewOptions() *Options {
 		MaxReconnects:       -1,
 		ReconnectHandler:    func() {},
 		DisconnectHandler:   func() {},
+		Compression:         NoCompression,
 		Verbose:             false,
 	}
 }
