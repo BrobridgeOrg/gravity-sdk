@@ -126,7 +126,7 @@ func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[s
 
 	if ac.options.Compression == S2Compression {
 		m.Header.Add("Content-Encoding", "s2")
-		m.Data = s2.Encode(nil, data)
+		m.Data = s2.EncodeSnappyBetter(nil, data)
 	} else {
 		m.Data = data
 	}
@@ -178,7 +178,7 @@ func (ac *AdapterConnector) PublishAsync(eventName string, payload []byte, meta 
 
 	if ac.options.Compression == S2Compression {
 		m.Header.Add("Content-Encoding", "s2")
-		m.Data = s2.Encode(nil, data)
+		m.Data = s2.EncodeSnappyBetter(nil, data)
 	} else {
 		m.Data = data
 	}
