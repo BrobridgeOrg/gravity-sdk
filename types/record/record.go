@@ -20,6 +20,7 @@ import (
 )
 
 var (
+	ErrNotFoundKey        = errors.New("Not found key")
 	ErrNotFoundKeyPath    = errors.New("Not found key path")
 	ErrNotSupportedMethod = errors.New("Not supported method")
 )
@@ -442,10 +443,9 @@ func getValue(value *Value, token PathToken) (*Value, error) {
 			if field != nil {
 				return field.Value, nil
 			}
-			return nil, fmt.Errorf("key not found")
-		default:
-			return nil, fmt.Errorf("key not found")
 		}
+
+		return nil, ErrNotFoundKey
 	case DataType_ARRAY:
 		switch token.Type {
 		case PathTokenTypeIndex:
@@ -457,9 +457,9 @@ func getValue(value *Value, token PathToken) (*Value, error) {
 				return nil, fmt.Errorf("index out of bounds %s", token.Value)
 			}
 			return value.Array.Elements[index], nil
-		default:
-			return nil, fmt.Errorf("key not found")
 		}
+
+		return nil, ErrNotFoundKey
 	default:
 		return nil, fmt.Errorf("can't deal with this type %d", value.Type)
 	}
