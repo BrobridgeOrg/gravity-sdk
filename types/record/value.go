@@ -2,8 +2,9 @@ package record
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"errors"
+
+	jsoniter "github.com/json-iterator/go"
 	//"google.golang.org/protobuf/proto"
 )
 
@@ -28,7 +29,8 @@ func (v *Value) GetBytes() ([]byte, error) {
 		}
 
 		// Convert to JSON string
-		data, _ := json.Marshal(payload)
+		data, _ := jsoniter.Marshal(payload)
+		//		data, _ := json.Marshal(payload)
 
 		return data, nil
 
@@ -42,7 +44,8 @@ func (v *Value) GetBytes() ([]byte, error) {
 		}
 
 		// Convert to JSON string
-		data, _ := json.Marshal(payload)
+		data, _ := jsoniter.Marshal(payload)
+		//data, _ := json.Marshal(payload)
 
 		return data, nil
 
