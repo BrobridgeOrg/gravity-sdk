@@ -7,9 +7,10 @@ import (
 )
 
 type EventBusOptions struct {
-	PingInterval        time.Duration
-	MaxPingsOutstanding int
-	MaxReconnects       int
+	PingInterval           time.Duration
+	MaxPingsOutstanding    int
+	MaxReconnects          int
+	PublishAsyncMaxPending int
 }
 
 type EventBusHandler struct {
@@ -67,7 +68,7 @@ func (eb *EventBus) GetConnection() *nats.Conn {
 func (eb *EventBus) GetJetStream() (nats.JetStreamContext, error) {
 
 	if eb.js == nil {
-		js, err := eb.connection.JetStream(nats.PublishAsyncMaxPending(1024000))
+		js, err := eb.connection.JetStream(nats.PublishAsyncMaxPending(eb.options.PublishAsyncMaxPending))
 		if err != nil {
 			return nil, err
 		}

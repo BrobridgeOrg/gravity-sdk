@@ -24,9 +24,10 @@ func (client *Client) Connect(host string, options *Options) error {
 	client.options = options
 
 	opts := EventBusOptions{
-		PingInterval:        time.Duration(options.PingInterval),
-		MaxPingsOutstanding: options.MaxPingsOutstanding,
-		MaxReconnects:       options.MaxReconnects,
+		PingInterval:           time.Duration(options.PingInterval),
+		MaxPingsOutstanding:    options.MaxPingsOutstanding,
+		MaxReconnects:          options.MaxReconnects,
+		PublishAsyncMaxPending: options.PublishAsyncMaxPending,
 	}
 
 	// Create a new instance connector
