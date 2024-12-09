@@ -104,12 +104,6 @@ func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[s
 
 	data, _ := json.Marshal(msg)
 
-	// Prepare JetStream context
-	js, err := ac.client.GetJetStream()
-	if err != nil {
-		return nil, err
-	}
-
 	// Publish
 	subject := fmt.Sprintf(domainEvent, ac.options.Domain, eventName)
 
@@ -131,7 +125,7 @@ func (ac *AdapterConnector) Publish(eventName string, payload []byte, meta map[s
 		m.Data = data
 	}
 
-	return js.PublishMsg(m)
+	return ac.js.PublishMsg(m)
 
 	/*
 		ac.buffer.Push(&Request{
