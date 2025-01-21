@@ -548,7 +548,7 @@ func getValueData(value *Value, isFlat bool) interface{} {
 	case DataType_UINT64:
 		return uint64(binary.BigEndian.Uint64(value.Value))
 	case DataType_BOOLEAN:
-		return int8(value.Value[0]) & 1
+		return int8(value.Value[3]) & 1
 	case DataType_STRING:
 		return string(value.Value)
 	case DataType_NULL:
